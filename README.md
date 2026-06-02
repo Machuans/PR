@@ -34,6 +34,9 @@
 ## 一键下载与桌面入口
 
 - `start-pr-pc.cmd`：启动新的 PR PC 桌面端。它会自动检查 LM Studio API、启动 SillyTavern 后端，并在就绪后进入 SillyTavern。
+- `start-model-proxy.cmd`：只启动多模型中文代理后端，适合你已经在浏览器里打开 SillyTavern 时使用。
+- `configure-sillytavern-chinese-proxy.cmd`：把 SillyTavern 设置切到 `http://127.0.0.1:7821/v1`，并把系统提示改为中文输出优先。
+- `set-deepseek-key.cmd`：保存 DeepSeek API Key 到 Windows 用户环境变量。
 - `build-pr-desktop.cmd`：本地打包 Windows 桌面端，产物在 `desktop/dist`。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
 - `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
@@ -49,8 +52,42 @@
 
 - 检查 `http://127.0.0.1:1234/v1/models` 是否可用。
 - 检查并启动 `E:\AI-Apps\SillyTavern` 的 SillyTavern 服务。
+- 提供统一多模型接口 `http://127.0.0.1:7821/v1`。
+- 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
+- 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
+
+### SillyTavern 多模型接口
+
+在 SillyTavern 中选择 Chat Completion / Custom OpenAI-compatible：
+
+- Base URL：`http://127.0.0.1:7821/v1`
+- API Key：本地代理可填任意占位文本，例如 `pr-desktop`
+- 本地主力模型：`pr-qwen35-9b`
+- DeepSeek 速度优先：`deepseek-v4-flash`
+- DeepSeek 质量优先：`deepseek-v4-pro`
+
+代理会按模型名自动分流：本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+
+### DeepSeek API Key
+
+先保存你的 DeepSeek API Key：
+
+```powershell
+.\set-deepseek-key.cmd
+```
+
+也可以手动设置 Windows 用户环境变量：
+
+```powershell
+[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "你的 DeepSeek Key", "User")
+[Environment]::SetEnvironmentVariable("DEEPSEEK_BASE_URL", "https://api.deepseek.com", "User")
+```
+
+设置后重启 PR Desktop。
+
+如果你不打开 PR Desktop，只用浏览器访问 SillyTavern，请先双击 `start-model-proxy.cmd`，否则 SillyTavern 连接不到 `7821/v1`。
 
 本地开发：
 

@@ -7,6 +7,9 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $DownloadScript = Join-Path $PSScriptRoot "download-models.ps1"
 $PcScript = Join-Path $PSScriptRoot "start-pr-pc.ps1"
 $UpdateScript = Join-Path $PSScriptRoot "update-pr-kit.ps1"
+$DeepSeekKeyScript = Join-Path $PSScriptRoot "set-deepseek-key.ps1"
+$ConfigureProxyScript = Join-Path $PSScriptRoot "configure-sillytavern-chinese-proxy.ps1"
+$ModelProxyScript = Join-Path $PSScriptRoot "start-model-proxy.ps1"
 $SillyTavernDir = $env:PR_SILLYTAVERN_DIR
 if (-not $SillyTavernDir) {
   $SillyTavernDir = "E:\AI-Apps\SillyTavern"
@@ -102,6 +105,33 @@ function Update-PRKit {
   )
 }
 
+function Set-DeepSeekKey {
+  Start-Process powershell.exe -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", "`"$DeepSeekKeyScript`""
+  )
+}
+
+function Configure-SillyTavernChineseProxy {
+  Start-Process powershell.exe -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", "`"$ConfigureProxyScript`""
+  )
+}
+
+function Start-ModelProxy {
+  Start-Process powershell.exe -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", "`"$ModelProxyScript`""
+  )
+}
+
 while ($true) {
   Clear-Host
   Write-Host "PR Desktop Launcher"
@@ -117,7 +147,10 @@ while ($true) {
   Write-Host "7. Start SillyTavern backend"
   Write-Host "8. Open SillyTavern local UI"
   Write-Host "9. Auto update PR kit"
-  Write-Host "10. Exit"
+  Write-Host "10. Set DeepSeek API key"
+  Write-Host "11. Configure SillyTavern Chinese proxy"
+  Write-Host "12. Start model proxy"
+  Write-Host "13. Exit"
   Write-Host ""
 
   $choice = Read-Host "Choose"
@@ -134,7 +167,10 @@ while ($true) {
       Start-Process "http://localhost:8000"
     }
     "9" { Update-PRKit }
-    "10" { break }
+    "10" { Set-DeepSeekKey }
+    "11" { Configure-SillyTavernChineseProxy }
+    "12" { Start-ModelProxy }
+    "13" { break }
     default {
       Write-Host "Unknown choice."
       Start-Sleep -Seconds 1

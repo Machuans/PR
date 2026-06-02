@@ -29,6 +29,9 @@ $launcher = Join-Path $PSScriptRoot "start-pr-desktop.ps1"
 $downloader = Join-Path $PSScriptRoot "download-models.ps1"
 $pcLauncher = Join-Path $PSScriptRoot "start-pr-pc.ps1"
 $updater = Join-Path $PSScriptRoot "update-pr-kit.ps1"
+$deepSeekKey = Join-Path $PSScriptRoot "set-deepseek-key.ps1"
+$sillyTavernProxy = Join-Path $PSScriptRoot "configure-sillytavern-chinese-proxy.ps1"
+$modelProxy = Join-Path $PSScriptRoot "start-model-proxy.ps1"
 
 New-Shortcut `
   -Name "PR Desktop Launcher" `
@@ -49,6 +52,18 @@ New-Shortcut `
 New-Shortcut `
   -Name "PR Auto Update" `
   -Arguments "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$updater`" -InstallDesktopDependencies"
+
+New-Shortcut `
+  -Name "PR Set DeepSeek Key" `
+  -Arguments "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$deepSeekKey`""
+
+New-Shortcut `
+  -Name "PR Configure SillyTavern Chinese Proxy" `
+  -Arguments "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$sillyTavernProxy`""
+
+New-Shortcut `
+  -Name "PR Start Model Proxy" `
+  -Arguments "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$modelProxy`""
 
 Write-Host ""
 Write-Host "Desktop shortcuts installed. Default model directory: $InstallDir"

@@ -11,7 +11,7 @@
       <section class="hero">
         <p class="eyebrow">PR Desktop</p>
         <h1>正在准备本地 RP 工作台</h1>
-        <p class="subcopy">自动检查 LM Studio、本地模型接口和 SillyTavern；服务就绪后会进入聊天界面。</p>
+        <p class="subcopy">自动检查 LM Studio、本地模型接口、DeepSeek 接口和 SillyTavern；服务就绪后会进入聊天界面。</p>
       </section>
 
       <section class="status-grid" aria-label="服务状态">
@@ -41,11 +41,21 @@
           <p id="update-text">等待检查</p>
           <small>GitHub Release 更新源</small>
         </article>
+
+        <article class="status-panel" id="proxy-panel">
+          <div class="status-head">
+            <span class="dot" id="proxy-dot"></span>
+            <h2>多模型代理</h2>
+          </div>
+          <p id="proxy-text">等待后端</p>
+          <small id="proxy-url">http://127.0.0.1:7821/v1</small>
+        </article>
       </section>
 
       <section class="actions" aria-label="常用操作">
         <button id="start-button" type="button">启动/重试服务</button>
         <button id="open-models-button" type="button">打开模型目录</button>
+        <button id="copy-proxy-button" type="button">复制多模型接口</button>
         <button id="open-st-button" type="button">浏览器打开 SillyTavern</button>
         <button id="update-button" type="button">检查更新</button>
       </section>
@@ -67,6 +77,9 @@
         stUrl: document.querySelector('#st-url'),
         updateDot: document.querySelector('#update-dot'),
         updateText: document.querySelector('#update-text'),
+        proxyDot: document.querySelector('#proxy-dot'),
+        proxyText: document.querySelector('#proxy-text'),
+        proxyUrl: document.querySelector('#proxy-url'),
         footer: document.querySelector('#footer'),
       };
 
@@ -84,6 +97,13 @@
         setDot(state.stDot, status.sillyTavern.ok);
         state.stText.textContent = status.sillyTavern.ok ? '服务已就绪' : '未启动，正在尝试启动';
         state.stUrl.textContent = status.config.sillyTavernUrl;
+
+        const deepseek = status.proxy.providers.find((provider) => provider.id === 'deepseek');
+        setDot(state.proxyDot, Boolean(status.proxy.baseUrl), !status.proxy.baseUrl);
+        state.proxyText.textContent = deepseek?.configured
+          ? '中文代理已启用，DeepSeek 已配置'
+          : '中文代理已启用，DeepSeek 等待 API Key';
+        state.proxyUrl.textContent = status.proxy.baseUrl || `http://127.0.0.1:${backendPort}/v1`;
 
         state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
       }
@@ -111,6 +131,11 @@
 
       document.querySelector('#open-models-button').addEventListener('click', () => {
         postAction('/api/open/model-folder');
+      });
+
+      document.querySelector('#copy-proxy-button').addEventListener('click', async () => {
+        await navigator.clipboard.writeText(state.proxyUrl.textContent);
+        state.footer.textContent = `已复制：${state.proxyUrl.textContent}`;
       });
 
       document.querySelector('#open-st-button').addEventListener('click', () => {

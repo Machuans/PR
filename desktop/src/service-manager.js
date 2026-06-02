@@ -3,6 +3,10 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const {
+  canHandleModelProxy,
+  getProviderStatus,
+} = require('./model-proxy');
 
 const CONFIG = {
   sillyTavernDir: process.env.PR_SILLYTAVERN_DIR || 'E:\\AI-Apps\\SillyTavern',
@@ -179,6 +183,11 @@ async function getStatus() {
   return {
     config: CONFIG,
     backendPort,
+    proxy: {
+      baseUrl: backendPort ? `http://127.0.0.1:${backendPort}/v1` : null,
+      forceChinese: process.env.PR_FORCE_CHINESE !== 'false',
+      providers: getProviderStatus(),
+    },
     sillyTavern,
     lmStudio,
     paths: {
@@ -275,6 +284,16 @@ async function createBackendServer(handlers = {}) {
     const url = new URL(req.url, 'http://127.0.0.1');
 
     try {
+      if (url.pathname.startsWith('/v1/')) {
+        const lmStudio = await checkLmStudio();
+        const localModels = Array.isArray(lmStudio.models) ? lmStudio.models : [];
+        if (canHandleModelProxy(req, res, url, localModels)) {
+          return;
+        }
+      } else if (canHandleModelProxy(req, res, url, [])) {
+        return;
+      }
+
       if (url.pathname === '/api/status') {
         sendJson(res, 200, await getStatus());
         return;
