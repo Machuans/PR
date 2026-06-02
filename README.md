@@ -33,15 +33,16 @@
 
 ## 一键下载与桌面入口
 
-- `start-pr-pc.cmd`：启动新的 PR PC 桌面端。它会自动检查 LM Studio API、启动 SillyTavern 后端，并在就绪后进入 SillyTavern。
+- `build-pr-desktop.cmd`：本地打包并安装统一的 Windows 桌面端，桌面只保留一个 `PR Desktop` 快捷方式。
+- `start-pr-pc.cmd`：旧版备用启动器。优先使用打包后的 `PR Desktop` 应用。
 - `start-model-proxy.cmd`：只启动多模型中文代理后端，适合你已经在浏览器里打开 SillyTavern 时使用。
 - `configure-sillytavern-chinese-proxy.cmd`：把 SillyTavern 设置切到 `http://127.0.0.1:7821/v1`，并把系统提示改为中文输出优先。
 - `set-deepseek-key.cmd`：保存 DeepSeek API Key 到 Windows 用户环境变量。
-- `build-pr-desktop.cmd`：本地打包 Windows 桌面端，产物在 `desktop/dist`。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
 - `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
 - `scripts/download-models.ps1 -ModelSet advanced`：下载 27B 进阶候选，8-12GB 显存可能较慢。
-- `scripts/install-desktop-shortcuts.ps1`：在桌面创建 `PR Desktop Launcher`、`PR PC App`、下载模型和自动更新快捷方式。
+- `scripts/install-local-app.ps1`：把 `desktop/dist/win-unpacked` 安装到 `E:\AI-Apps\PR-Desktop`，并刷新唯一桌面快捷方式。
+- `scripts/install-desktop-shortcuts.ps1`：清理旧 PR 快捷方式，只创建一个 `PR Desktop` 快捷方式。
 - `scripts/update-pr-kit.ps1`：从 GitHub 拉取本仓库最新版本，安装桌面端依赖，并刷新桌面快捷方式。
 - 下载脚本默认使用 `hf-mirror.com`，更适合 Hugging Face 直连不稳定的网络；如果你能直连 Hugging Face，可加 `-Source huggingface`。
 - 下载脚本使用 `curl.exe`，支持断点续传和自动重试；如果网络中断，重新运行同一命令会从已有文件继续。
@@ -55,6 +56,7 @@
 - 提供统一多模型接口 `http://127.0.0.1:7821/v1`。
 - 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
 - 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
+- 提供智能模型名 `pr-auto`：常规 RP 走本地模型，记忆/总结走 DeepSeek Flash，长上下文/角色卡/设定/润色走 DeepSeek Pro；没有 DeepSeek Key 时自动回退本地模型。
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
 
@@ -64,11 +66,12 @@
 
 - Base URL：`http://127.0.0.1:7821/v1`
 - API Key：本地代理可填任意占位文本，例如 `pr-desktop`
+- 智能默认模型：`pr-auto`
 - 本地主力模型：`pr-qwen35-9b`
 - DeepSeek 速度优先：`deepseek-v4-flash`
 - DeepSeek 质量优先：`deepseek-v4-pro`
 
-代理会按模型名自动分流：本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+代理会按模型名自动分流：`pr-auto` 自动识别 RP、总结、记忆、角色卡、世界书、长上下文等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
 
 ### DeepSeek API Key
 

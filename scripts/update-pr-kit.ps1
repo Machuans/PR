@@ -27,7 +27,12 @@ try {
     }
   }
 
-  & (Join-Path $PSScriptRoot "install-desktop-shortcuts.ps1")
+  $installedApp = Join-Path $RepoRoot "desktop\dist\win-unpacked\PR Desktop.exe"
+  if (Test-Path $installedApp) {
+    & (Join-Path $PSScriptRoot "install-local-app.ps1")
+  } else {
+    & (Join-Path $PSScriptRoot "install-desktop-shortcuts.ps1") -AllowScriptFallback
+  }
 }
 finally {
   Pop-Location

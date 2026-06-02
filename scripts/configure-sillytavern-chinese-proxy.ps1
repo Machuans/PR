@@ -1,7 +1,7 @@
 param(
   [string]$SettingsPath = "E:\AI-Apps\SillyTavern\data\default-user\settings.json",
   [string]$ProxyBaseUrl = "http://127.0.0.1:7821/v1",
-  [string]$Model = "pr-qwen35-9b"
+  [string]$Model = "pr-auto"
 )
 
 $ErrorActionPreference = "Stop"

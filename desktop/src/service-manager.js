@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   canHandleModelProxy,
   getProviderStatus,
+  getSmartModelStatus,
 } = require('./model-proxy');
 
 const CONFIG = {
@@ -14,6 +15,7 @@ const CONFIG = {
   sillyTavernUrl: process.env.PR_SILLYTAVERN_URL || 'http://127.0.0.1:8000',
   lmStudioBaseUrl: process.env.PR_LMSTUDIO_URL || 'http://127.0.0.1:1234/v1',
   preferredModelId: process.env.PR_MODEL_ID || 'pr-qwen35-9b',
+  defaultProxyModelId: process.env.PR_PROXY_MODEL_ID || 'pr-auto',
   backendStartPort: Number(process.env.PR_BACKEND_PORT || 7821),
 };
 
@@ -41,6 +43,7 @@ function appendLog(file, message) {
 function pipeProcessLogs(child, logFile, name) {
   child.stdout?.on('data', (chunk) => appendLog(logFile, `${name}: ${chunk.toString().trimEnd()}`));
   child.stderr?.on('data', (chunk) => appendLog(logFile, `${name} error: ${chunk.toString().trimEnd()}`));
+  child.on('error', (error) => appendLog(logFile, `${name} spawn error: ${error.message}`));
   child.on('exit', (code, signal) => appendLog(logFile, `${name} exited code=${code} signal=${signal || ''}`));
 }
 
@@ -114,6 +117,35 @@ function findLmsCli() {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
+function findWindowsCommand(candidates) {
+  return candidates.filter(Boolean).find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function findNpmCommand() {
+  if (process.platform !== 'win32') {
+    return 'npm';
+  }
+
+  return findWindowsCommand([
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs', 'npm.cmd'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'nodejs', 'npm.cmd'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'nodejs', 'npm.cmd'),
+    path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'npm.cmd'),
+  ]);
+}
+
+function findNodeCommand() {
+  if (process.platform !== 'win32') {
+    return 'node';
+  }
+
+  return findWindowsCommand([
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs', 'node.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'nodejs', 'node.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'nodejs', 'node.exe'),
+  ]);
+}
+
 function startLmStudioApp() {
   const exe = findLmStudioExe();
   if (!exe) {
@@ -166,15 +198,33 @@ function startSillyTavern() {
     return { started: false, reason };
   }
 
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  sillyTavernProcess = childProcess.spawn(npmCommand, ['start'], {
+  const nodeCommand = findNodeCommand();
+  const npmCommand = findNpmCommand();
+  let command = null;
+  let args = [];
+
+  if (nodeCommand && fs.existsSync(path.join(CONFIG.sillyTavernDir, 'server.js'))) {
+    command = nodeCommand;
+    args = ['server.js'];
+  } else if (npmCommand) {
+    command = npmCommand;
+    args = ['start'];
+  }
+
+  if (!command) {
+    const reason = 'Node.js/npm was not found. Install Node.js LTS or start SillyTavern manually.';
+    appendLog(sillyTavernLog, reason);
+    return { started: false, reason };
+  }
+
+  sillyTavernProcess = childProcess.spawn(command, args, {
     cwd: CONFIG.sillyTavernDir,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   pipeProcessLogs(sillyTavernProcess, sillyTavernLog, 'sillytavern');
-  appendLog(sillyTavernLog, `Started SillyTavern from ${CONFIG.sillyTavernDir}`);
+  appendLog(sillyTavernLog, `Started SillyTavern from ${CONFIG.sillyTavernDir} with ${command} ${args.join(' ')}`);
   return { started: true, path: CONFIG.sillyTavernDir };
 }
 
@@ -187,6 +237,7 @@ async function getStatus() {
       baseUrl: backendPort ? `http://127.0.0.1:${backendPort}/v1` : null,
       forceChinese: process.env.PR_FORCE_CHINESE !== 'false',
       providers: getProviderStatus(),
+      smart: getSmartModelStatus(),
     },
     sillyTavern,
     lmStudio,

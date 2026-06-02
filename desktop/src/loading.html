@@ -11,7 +11,7 @@
       <section class="hero">
         <p class="eyebrow">PR Desktop</p>
         <h1>正在准备本地 RP 工作台</h1>
-        <p class="subcopy">自动检查 LM Studio、本地模型接口、DeepSeek 接口和 SillyTavern；服务就绪后会进入聊天界面。</p>
+        <p class="subcopy">自动检查 LM Studio、本地模型接口、DeepSeek 接口和 SillyTavern；服务就绪后会进入聊天界面，并由智能模型路由自动分配不同场景。</p>
       </section>
 
       <section class="status-grid" aria-label="服务状态">
@@ -101,8 +101,8 @@
         const deepseek = status.proxy.providers.find((provider) => provider.id === 'deepseek');
         setDot(state.proxyDot, Boolean(status.proxy.baseUrl), !status.proxy.baseUrl);
         state.proxyText.textContent = deepseek?.configured
-          ? '中文代理已启用，DeepSeek 已配置'
-          : '中文代理已启用，DeepSeek 等待 API Key';
+          ? `智能路由已启用：${status.proxy.smart.defaultModel}`
+          : `智能路由已启用：${status.proxy.smart.defaultModel}，DeepSeek 未配置时自动回退本地`;
         state.proxyUrl.textContent = status.proxy.baseUrl || `http://127.0.0.1:${backendPort}/v1`;
 
         state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;

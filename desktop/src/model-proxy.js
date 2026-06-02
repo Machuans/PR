@@ -16,6 +16,10 @@ const FINAL_CHINESE_REMINDER = [
   '不要解释本条指令，不要提到语言转换。',
 ].join('\n');
 
+const DEFAULT_LOCAL_MODEL = process.env.PR_MODEL_ID || 'pr-qwen35-9b';
+const DEFAULT_PROXY_MODEL = process.env.PR_PROXY_MODEL_ID || 'pr-auto';
+const SMART_MODEL_IDS = ['pr-auto', 'auto', 'smart', 'default'];
+
 const PROVIDERS = [
   {
     id: 'local',
@@ -24,9 +28,9 @@ const PROVIDERS = [
     apiKeyEnv: null,
     models: [
       {
-        id: process.env.PR_MODEL_ID || 'pr-qwen35-9b',
+        id: DEFAULT_LOCAL_MODEL,
         label: 'PR Qwen 9B Local',
-        aliases: ['local/pr-qwen35-9b'],
+        aliases: ['local/pr-qwen35-9b', 'local', 'lmstudio'],
       },
     ],
   },
@@ -51,11 +55,140 @@ const PROVIDERS = [
 ];
 
 function getAllModelIds() {
-  return PROVIDERS.flatMap((provider) => provider.models.flatMap((model) => [model.id, ...(model.aliases || [])]));
+  return [
+    ...SMART_MODEL_IDS,
+    ...PROVIDERS.flatMap((provider) => provider.models.flatMap((model) => [model.id, ...(model.aliases || [])])),
+  ];
 }
 
-function findRoute(modelId) {
-  const normalized = modelId || process.env.PR_MODEL_ID || 'pr-qwen35-9b';
+function isProviderConfigured(provider) {
+  return provider.apiKeyEnv ? Boolean(process.env[provider.apiKeyEnv]) : true;
+}
+
+function textFromContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (part?.type === 'text') {
+        return part.text || '';
+      }
+      return '';
+    }).join('\n');
+  }
+
+  return '';
+}
+
+function messagesToText(messages) {
+  return Array.isArray(messages)
+    ? messages.map((message) => textFromContent(message?.content)).filter(Boolean).join('\n')
+    : '';
+}
+
+function hasAny(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function selectSmartModel(messages = []) {
+  const deepseek = PROVIDERS.find((provider) => provider.id === 'deepseek');
+  const text = messagesToText(messages);
+  const normalized = text.toLowerCase();
+  const deepseekConfigured = deepseek ? isProviderConfigured(deepseek) : false;
+
+  if (process.env.PR_SMART_LOCAL_ONLY === 'true' || !deepseekConfigured) {
+    return {
+      model: DEFAULT_LOCAL_MODEL,
+      reason: deepseekConfigured ? 'local_only' : 'deepseek_not_configured',
+      scene: 'local_default',
+    };
+  }
+
+  const summaryKeywords = [
+    'summary',
+    'summarize',
+    'memory',
+    'lorebook',
+    'world info',
+    'author note',
+    '总结',
+    '摘要',
+    '记忆',
+    '回顾',
+    '归纳',
+    '提炼',
+    '世界书',
+    '作者注',
+    '聊天补全',
+    '关系进展',
+  ];
+  const planningKeywords = [
+    'analyze',
+    'analysis',
+    'rewrite',
+    'polish',
+    'outline',
+    'profile',
+    'character card',
+    'worldbuilding',
+    '分析',
+    '推理',
+    '规划',
+    '大纲',
+    '设定',
+    '角色卡',
+    '世界观',
+    '改写',
+    '润色',
+    '扩写',
+    '长篇',
+    '伏笔',
+    '结构',
+  ];
+
+  if (hasAny(normalized, summaryKeywords)) {
+    return {
+      model: 'deepseek-v4-flash',
+      reason: 'summary_memory',
+      scene: 'memory',
+    };
+  }
+
+  if (text.length > 7000 || hasAny(normalized, planningKeywords)) {
+    return {
+      model: 'deepseek-v4-pro',
+      reason: text.length > 7000 ? 'long_context' : 'planning_or_rewrite',
+      scene: 'planning',
+    };
+  }
+
+  return {
+    model: DEFAULT_LOCAL_MODEL,
+    reason: 'roleplay_default',
+    scene: 'roleplay',
+  };
+}
+
+function findRoute(modelId, messages = []) {
+  const normalized = modelId || DEFAULT_PROXY_MODEL;
+
+  if (SMART_MODEL_IDS.includes(normalized)) {
+    const smart = selectSmartModel(messages);
+    const route = findRoute(smart.model, messages);
+    return {
+      ...route,
+      requestedModel: normalized,
+      smart: true,
+      smartModel: smart.model,
+      smartReason: smart.reason,
+      smartScene: smart.scene,
+    };
+  }
 
   for (const provider of PROVIDERS) {
     for (const model of provider.models) {
@@ -89,6 +222,19 @@ function getProviderStatus() {
       aliases: model.aliases || [],
     })),
   }));
+}
+
+function getSmartModelStatus() {
+  return {
+    defaultModel: DEFAULT_PROXY_MODEL,
+    smartModels: SMART_MODEL_IDS,
+    localFallback: DEFAULT_LOCAL_MODEL,
+    rules: [
+      { scene: 'roleplay', model: DEFAULT_LOCAL_MODEL, description: '常规 RP、陪伴和短聊天优先走本地模型。' },
+      { scene: 'memory', model: 'deepseek-v4-flash', description: '总结、记忆、世界书整理优先走 DeepSeek Flash。' },
+      { scene: 'planning', model: 'deepseek-v4-pro', description: '长上下文、角色卡、设定、润色和复杂规划优先走 DeepSeek Pro。' },
+    ],
+  };
 }
 
 function withChineseSystemPrompt(messages, providerId) {
@@ -365,7 +511,7 @@ async function sendUpstreamResponse(res, upstream, requestBody, provider, header
 
 async function handleChatCompletions(req, res) {
   const requestBody = await readJsonBody(req);
-  const route = findRoute(requestBody.model);
+  const route = findRoute(requestBody.model, requestBody.messages);
   const provider = route.provider;
 
   if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
@@ -428,9 +574,13 @@ function canHandleModelProxy(req, res, url, localModels = []) {
 
 module.exports = {
   CHINESE_SYSTEM_PROMPT,
+  DEFAULT_PROXY_MODEL,
+  SMART_MODEL_IDS,
   canHandleModelProxy,
   createModelList,
   findRoute,
   getProviderStatus,
+  getSmartModelStatus,
+  selectSmartModel,
   withChineseSystemPrompt,
 };

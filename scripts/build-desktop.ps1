@@ -1,5 +1,6 @@
 param(
-  [switch]$OpenOutput
+  [switch]$OpenOutput,
+  [switch]$InstallLocal
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +29,10 @@ try {
   npm install
   npm run lint:js
   npm run dist
+
+  if ($InstallLocal) {
+    & (Join-Path $PSScriptRoot "install-local-app.ps1")
+  }
 
   if ($OpenOutput) {
     Start-Process explorer.exe (Join-Path $DesktopDir "dist")
