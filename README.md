@@ -19,16 +19,26 @@
 ## 快速配置
 
 1. 安装并打开 SillyTavern。
-2. 安装并打开 LM Studio，下载本地主力模型：
+2. 双击 `download-primary-model.cmd` 一键下载本地主力模型到 `E:\AI-Models\PR`。
+3. 安装并打开 LM Studio，加载已下载的 GGUF 模型：
    - 首选：`LuffyTheFox/Qwen3.5-9B-Claude-4.6-Opus-Uncensored-Distilled-GGUF`
    - 推荐文件：`Qwen3.5-9B.Q4_K_M.gguf`
-3. 在 LM Studio 开启 Local Server。
+4. 在 LM Studio 开启 Local Server。
    - SillyTavern local/OpenAI-compatible base URL：`http://localhost:1234/v1`
-4. 在 SillyTavern 导入角色卡，填入本套件的 System Prompt、Author's Note、World Info。
-5. OpenRouter 只作为补强：
+5. 在 SillyTavern 导入角色卡，填入本套件的 System Prompt、Author's Note、World Info。
+6. OpenRouter 只作为补强：
    - 中文 RP：`minimax/minimax-m2-her`
    - 成人 RP 风味：`sao10k/l3.3-euryale-70b`、`anthracite-org/magnum-v4-72b`
    - 低成本长聊/总结：`deepseek/deepseek-v3.2`、`z-ai/glm-4.7-flash`
+
+## 一键下载与桌面入口
+
+- `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
+- `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
+- `scripts/download-models.ps1 -ModelSet advanced`：下载 27B 进阶候选，8-12GB 显存可能较慢。
+- `scripts/install-desktop-shortcuts.ps1`：在桌面创建 `PR Desktop Launcher`、`PR Download Primary Model`、`PR Download Core Models` 三个快捷方式。
+- 下载脚本默认使用 `hf-mirror.com`，更适合 Hugging Face 直连不稳定的网络；如果你能直连 Hugging Face，可加 `-Source huggingface`。
+- 下载脚本使用 `curl.exe`，支持断点续传和自动重试；如果网络中断，重新运行同一命令会从已有文件继续。
 
 ## 推荐运行参数
 
@@ -44,4 +54,3 @@
 - 云端模型只在其服务条款允许范围内使用。
 - 不使用 jailbreak 或规程规避提示词。
 - 角色卡、World Info、Summary 都必须持续保留：虚构、成年、自愿、不替用户行动。
-

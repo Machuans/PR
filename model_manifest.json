@@ -8,6 +8,7 @@
   "local_runtime": {
     "primary": "LM Studio",
     "sillytavern_base_url": "http://localhost:1234/v1",
+    "default_model_download_dir": "E:\\AI-Models\\PR",
     "notes": "OpenAI-compatible local server. Prefer local models for high-scale sessions."
   },
   "local_models": [
@@ -150,4 +151,3 @@
     }
   ]
 }
-
