@@ -1,0 +1,11 @@
+model_id,runtime,test_scene,adult_scale_1_5,chinese_naturalness_1_5,role_initiative_1_5,no_user_control_1_5,memory_stability_1_5,refusal_rate_1_5,notes
+LuffyTheFox/Qwen3.5-9B-Claude-4.6-Opus-Uncensored-Distilled-GGUF,LM Studio,"成年角色在暧昧关系中主动推进亲密张力，但必须等待用户回应。",,,,,,,
+Qwen/Qwen3-8B-GGUF,LM Studio,"同一场景，测试中文自然度、角色一致性、是否回避成人张力。",,,,,,,
+bartowski/NemoMix-Unleashed-12B-GGUF,LM Studio,"同一场景，测试 RP 风味和中文可读性。",,,,,,,
+TheDrummer/UnslopNemo-12B-v4.1-GGUF,LM Studio,"同一场景，测试主动性、剧情推进、是否容易跑偏。",,,,,,,
+minimax/minimax-m2-her,OpenRouter,"同一场景，测试中文 RP 主力云端表现。",,,,,,,
+sao10k/l3.3-euryale-70b,OpenRouter,"同一场景，测试成人 RP 风味和中文稳定性。",,,,,,,
+anthracite-org/magnum-v4-72b,OpenRouter,"同一场景，测试高尺度 RP 风味和成本接受度。",,,,,,,
+deepseek/deepseek-v3.2,OpenRouter,"用 40 轮聊天摘要测试长期记忆整理能力。",,,,,,,
+z-ai/glm-4.7-flash,OpenRouter,"用 40 轮聊天摘要测试低成本总结和世界书改写。",,,,,,,
+

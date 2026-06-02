@@ -1,0 +1,153 @@
+{
+  "generated_at": "2026-06-02",
+  "priority": [
+    "adult_scale_low_restriction",
+    "chinese_rp_style",
+    "romance_companionship"
+  ],
+  "local_runtime": {
+    "primary": "LM Studio",
+    "sillytavern_base_url": "http://localhost:1234/v1",
+    "notes": "OpenAI-compatible local server. Prefer local models for high-scale sessions."
+  },
+  "local_models": [
+    {
+      "rank": 1,
+      "id": "LuffyTheFox/Qwen3.5-9B-Claude-4.6-Opus-Uncensored-Distilled-GGUF",
+      "role": "primary_adult_chinese_rp",
+      "recommended_file_8_12gb_vram": "Qwen3.5-9B.Q4_K_M.gguf",
+      "optional_file_more_vram": "Qwen3.5-9B.Q8_0.gguf",
+      "strengths": [
+        "uncensored-tagged",
+        "Chinese and English",
+        "good first local test for low-restriction RP"
+      ],
+      "cautions": [
+        "Community model; verify behavior with your own test matrix.",
+        "Do not use for underage, non-consensual, real-person, or illegal scenarios."
+      ],
+      "url": "https://huggingface.co/LuffyTheFox/Qwen3.5-9B-Claude-4.6-Opus-Uncensored-Distilled-GGUF"
+    },
+    {
+      "rank": 2,
+      "id": "Qwen/Qwen3-8B-GGUF",
+      "role": "stable_chinese_backup",
+      "recommended_file_8_12gb_vram": "Qwen3-8B-Q4_K_M.gguf",
+      "optional_file_more_vram": "Qwen3-8B-Q5_K_M.gguf",
+      "strengths": [
+        "stable Chinese",
+        "multi-turn dialogue",
+        "roleplay baseline"
+      ],
+      "cautions": [
+        "Adult scale is weaker than uncensored fine-tunes."
+      ],
+      "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF"
+    },
+    {
+      "rank": 3,
+      "id": "bartowski/NemoMix-Unleashed-12B-GGUF",
+      "role": "rp_flavor_backup",
+      "recommended_file_8_12gb_vram": "NemoMix-Unleashed-12B-Q4_K_M.gguf",
+      "optional_file_more_vram": "NemoMix-Unleashed-12B-Q5_K_M.gguf",
+      "strengths": [
+        "RP-oriented community merge",
+        "adult-writing flavor"
+      ],
+      "cautions": [
+        "Chinese ability must be tested.",
+        "12B may need lower context or partial CPU offload on 8GB VRAM."
+      ],
+      "url": "https://huggingface.co/bartowski/NemoMix-Unleashed-12B-GGUF"
+    },
+    {
+      "rank": 4,
+      "id": "TheDrummer/UnslopNemo-12B-v4.1-GGUF",
+      "role": "rp_flavor_backup",
+      "recommended_file_8_12gb_vram": "Rocinante-12B-v2j-Q4_K_M.gguf",
+      "optional_file_more_vram": "Rocinante-12B-v2j-Q5_K_M.gguf",
+      "strengths": [
+        "creative RP flavor",
+        "good candidate for comparison"
+      ],
+      "cautions": [
+        "Repository file names differ from repo name.",
+        "Chinese ability must be tested."
+      ],
+      "url": "https://huggingface.co/TheDrummer/UnslopNemo-12B-v4.1-GGUF"
+    },
+    {
+      "rank": 5,
+      "id": "mradermacher/Qwen3.5-27B-heretic-GGUF",
+      "role": "advanced_low_restriction_chinese_candidate",
+      "recommended_file_8_12gb_vram": "Qwen3.5-27B-heretic.Q3_K_M.gguf",
+      "optional_file_more_vram": "Qwen3.5-27B-heretic.Q4_K_M.gguf",
+      "strengths": [
+        "Qwen-based",
+        "uncensored/heretic community line"
+      ],
+      "cautions": [
+        "27B is likely slow on 8-12GB VRAM.",
+        "Use only after the 9B primary model is working."
+      ],
+      "url": "https://huggingface.co/mradermacher/Qwen3.5-27B-heretic-GGUF"
+    }
+  ],
+  "openrouter_models": [
+    {
+      "id": "minimax/minimax-m2-her",
+      "role": "cloud_chinese_rp_primary",
+      "context_length": 65536,
+      "usd_per_million_input_tokens": 0.3,
+      "usd_per_million_output_tokens": 1.2,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/minimax/minimax-m2-her"
+    },
+    {
+      "id": "sao10k/l3.3-euryale-70b",
+      "role": "cloud_adult_rp_flavor",
+      "context_length": 131072,
+      "usd_per_million_input_tokens": 0.65,
+      "usd_per_million_output_tokens": 0.75,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/sao10k/l3.3-euryale-70b"
+    },
+    {
+      "id": "anthracite-org/magnum-v4-72b",
+      "role": "cloud_adult_rp_flavor",
+      "context_length": 32768,
+      "usd_per_million_input_tokens": 3.0,
+      "usd_per_million_output_tokens": 5.0,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/anthracite-org/magnum-v4-72b"
+    },
+    {
+      "id": "deepseek/deepseek-v3.2",
+      "role": "cheap_long_chat_summary",
+      "context_length": 131072,
+      "usd_per_million_input_tokens": 0.2288,
+      "usd_per_million_output_tokens": 0.3432,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/deepseek/deepseek-v3.2"
+    },
+    {
+      "id": "z-ai/glm-4.7-flash",
+      "role": "cheap_long_chat_summary",
+      "context_length": 202752,
+      "usd_per_million_input_tokens": 0.06,
+      "usd_per_million_output_tokens": 0.4,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/z-ai/glm-4.7-flash"
+    },
+    {
+      "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+      "role": "free_uncensored_experiment",
+      "context_length": 32768,
+      "usd_per_million_input_tokens": 0.0,
+      "usd_per_million_output_tokens": 0.0,
+      "top_provider_moderated": false,
+      "url": "https://openrouter.ai/cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+    }
+  ]
+}
+
