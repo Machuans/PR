@@ -35,10 +35,21 @@ jobs:
 
       - name: Build installer for tagged release
         if: startsWith(github.ref, 'refs/tags/')
-        run: npm run dist -- --publish always
+        run: npm run dist -- --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: PR Desktop ${{ github.ref_name }}
+          files: |
+            desktop/dist/PR-Desktop-Setup-*.exe
+            desktop/dist/PR-Desktop-Setup-*.exe.blockmap
+            desktop/dist/PR-Desktop-Portable-*.exe
+            desktop/dist/latest.yml
 
       - name: Build installer for manual run
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
