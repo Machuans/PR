@@ -86,7 +86,16 @@ sysprompt.content = chinesePrompt;
 const extensionSettings = ensureObject(settings, 'extension_settings');
 const translate = ensureObject(extensionSettings, 'translate');
 translate.target_language = 'zh-CN';
-translate.auto_mode = 'both';
+translate.internal_language = 'en';
+translate.provider = translate.provider || 'google';
+translate.auto_mode = 'none';
+translate.deepl_endpoint = translate.deepl_endpoint || 'free';
+
+const vectors = ensureObject(extensionSettings, 'vectors');
+vectors.translate_files = false;
+
+const expressions = ensureObject(extensionSettings, 'expressions');
+expressions.translate = false;
 
 fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
 
