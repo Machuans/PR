@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PR Desktop</title>
+    <link rel="stylesheet" href="./loading.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">PR Desktop</p>
+        <h1>正在准备本地 RP 工作台</h1>
+        <p class="subcopy">自动检查 LM Studio、本地模型接口和 SillyTavern；服务就绪后会进入聊天界面。</p>
+      </section>
+
+      <section class="status-grid" aria-label="服务状态">
+        <article class="status-panel" id="lm-panel">
+          <div class="status-head">
+            <span class="dot" id="lm-dot"></span>
+            <h2>LM Studio</h2>
+          </div>
+          <p id="lm-text">检查中</p>
+          <small id="lm-model">等待模型状态</small>
+        </article>
+
+        <article class="status-panel" id="st-panel">
+          <div class="status-head">
+            <span class="dot" id="st-dot"></span>
+            <h2>SillyTavern</h2>
+          </div>
+          <p id="st-text">检查中</p>
+          <small id="st-url">http://127.0.0.1:8000</small>
+        </article>
+
+        <article class="status-panel" id="update-panel">
+          <div class="status-head">
+            <span class="dot" id="update-dot"></span>
+            <h2>自动更新</h2>
+          </div>
+          <p id="update-text">等待检查</p>
+          <small>GitHub Release 更新源</small>
+        </article>
+      </section>
+
+      <section class="actions" aria-label="常用操作">
+        <button id="start-button" type="button">启动/重试服务</button>
+        <button id="open-models-button" type="button">打开模型目录</button>
+        <button id="open-st-button" type="button">浏览器打开 SillyTavern</button>
+        <button id="update-button" type="button">检查更新</button>
+      </section>
+
+      <p class="footer" id="footer">后端连接中</p>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const backendPort = params.get('port') || '7821';
+      const apiBase = `http://127.0.0.1:${backendPort}`;
+
+      const state = {
+        lmDot: document.querySelector('#lm-dot'),
+        lmText: document.querySelector('#lm-text'),
+        lmModel: document.querySelector('#lm-model'),
+        stDot: document.querySelector('#st-dot'),
+        stText: document.querySelector('#st-text'),
+        stUrl: document.querySelector('#st-url'),
+        updateDot: document.querySelector('#update-dot'),
+        updateText: document.querySelector('#update-text'),
+        footer: document.querySelector('#footer'),
+      };
+
+      function setDot(dot, ok, pending = false) {
+        dot.className = `dot ${ok ? 'ok' : pending ? 'pending' : 'bad'}`;
+      }
+
+      function renderStatus(status) {
+        setDot(state.lmDot, status.lmStudio.ok);
+        state.lmText.textContent = status.lmStudio.ok ? '接口已连接' : '未连接，正在尝试启动';
+        state.lmModel.textContent = status.lmStudio.preferredModelLoaded
+          ? `模型已加载：${status.config.preferredModelId}`
+          : `模型：${status.lmStudio.models?.join(', ') || '未检测到'}`;
+
+        setDot(state.stDot, status.sillyTavern.ok);
+        state.stText.textContent = status.sillyTavern.ok ? '服务已就绪' : '未启动，正在尝试启动';
+        state.stUrl.textContent = status.config.sillyTavernUrl;
+
+        state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
+      }
+
+      async function getStatus() {
+        const response = await fetch(`${apiBase}/api/status`);
+        const status = await response.json();
+        renderStatus(status);
+      }
+
+      async function postAction(path) {
+        const response = await fetch(`${apiBase}${path}`, { method: 'POST' });
+        const payload = await response.json();
+        if (payload.status) {
+          renderStatus(payload.status);
+        }
+        return payload;
+      }
+
+      document.querySelector('#start-button').addEventListener('click', async () => {
+        state.footer.textContent = '正在启动服务';
+        await postAction('/api/start');
+        await getStatus();
+      });
+
+      document.querySelector('#open-models-button').addEventListener('click', () => {
+        postAction('/api/open/model-folder');
+      });
+
+      document.querySelector('#open-st-button').addEventListener('click', () => {
+        postAction('/api/open/sillytavern');
+      });
+
+      document.querySelector('#update-button').addEventListener('click', async () => {
+        setDot(state.updateDot, false, true);
+        state.updateText.textContent = '正在检查更新';
+        const result = await postAction('/api/update/check');
+        if (result.ok) {
+          setDot(state.updateDot, true);
+          state.updateText.textContent = '更新检查已启动';
+        } else {
+          setDot(state.updateDot, false);
+          state.updateText.textContent = result.reason || result.error || '当前环境不能自动更新';
+        }
+      });
+
+      window.prDesktop?.onServiceStatus(renderStatus);
+      window.prDesktop?.onUpdateState((update) => {
+        setDot(state.updateDot, update.status !== 'error', update.status === 'checking' || update.status === 'downloading');
+        state.updateText.textContent = update.message;
+      });
+
+      getStatus();
+      setInterval(getStatus, 2500);
+    </script>
+  </body>
+</html>

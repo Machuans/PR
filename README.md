@@ -33,12 +33,44 @@
 
 ## 一键下载与桌面入口
 
+- `start-pr-pc.cmd`：启动新的 PR PC 桌面端。它会自动检查 LM Studio API、启动 SillyTavern 后端，并在就绪后进入 SillyTavern。
+- `build-pr-desktop.cmd`：本地打包 Windows 桌面端，产物在 `desktop/dist`。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
 - `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
 - `scripts/download-models.ps1 -ModelSet advanced`：下载 27B 进阶候选，8-12GB 显存可能较慢。
-- `scripts/install-desktop-shortcuts.ps1`：在桌面创建 `PR Desktop Launcher`、`PR Download Primary Model`、`PR Download Core Models` 三个快捷方式。
+- `scripts/install-desktop-shortcuts.ps1`：在桌面创建 `PR Desktop Launcher`、`PR PC App`、下载模型和自动更新快捷方式。
+- `scripts/update-pr-kit.ps1`：从 GitHub 拉取本仓库最新版本，安装桌面端依赖，并刷新桌面快捷方式。
 - 下载脚本默认使用 `hf-mirror.com`，更适合 Hugging Face 直连不稳定的网络；如果你能直连 Hugging Face，可加 `-Source huggingface`。
 - 下载脚本使用 `curl.exe`，支持断点续传和自动重试；如果网络中断，重新运行同一命令会从已有文件继续。
+
+## PC 桌面端与自动更新
+
+桌面端源码在 `desktop/`。它内置一个本地后端，负责：
+
+- 检查 `http://127.0.0.1:1234/v1/models` 是否可用。
+- 检查并启动 `E:\AI-Apps\SillyTavern` 的 SillyTavern 服务。
+- 打开默认模型目录 `E:\AI-Models\PR`。
+- 打包安装后通过 GitHub Release 自动检查更新。
+
+本地开发：
+
+```powershell
+cd desktop
+npm install
+npm run dev
+```
+
+本地打包：
+
+```powershell
+.\build-pr-desktop.cmd
+```
+
+GitHub 自动构建：
+
+- 推送 `v*` 标签会触发 `.github/workflows/desktop-release.yml`。
+- 工作流会在 Windows 上构建 NSIS 安装包和 portable 包，并发布到 GitHub Release。
+- 已安装的 PR Desktop 会从 `Machuans/PR` 的 GitHub Release 检查更新。
 
 ## 推荐运行参数
 

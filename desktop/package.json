@@ -1,0 +1,66 @@
+{
+  "name": "pr-desktop",
+  "version": "0.1.0",
+  "description": "PR Desktop launcher for SillyTavern, LM Studio, local models, and GitHub updates.",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "lint:js": "node --check src/main.js && node --check src/service-manager.js && node --check src/preload.js",
+    "pack": "electron-builder --dir --win",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.machuans.pr.desktop",
+    "productName": "PR Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PR Desktop",
+      "artifactName": "PR-Desktop-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "PR-Desktop-Portable-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Machuans",
+        "repo": "PR"
+      }
+    ]
+  }
+}

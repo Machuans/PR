@@ -1,0 +1,337 @@
+const childProcess = require('node:child_process');
+const fs = require('node:fs');
+const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
+
+const CONFIG = {
+  sillyTavernDir: process.env.PR_SILLYTAVERN_DIR || 'E:\\AI-Apps\\SillyTavern',
+  modelDir: process.env.PR_MODEL_DIR || 'E:\\AI-Models\\PR',
+  sillyTavernUrl: process.env.PR_SILLYTAVERN_URL || 'http://127.0.0.1:8000',
+  lmStudioBaseUrl: process.env.PR_LMSTUDIO_URL || 'http://127.0.0.1:1234/v1',
+  preferredModelId: process.env.PR_MODEL_ID || 'pr-qwen35-9b',
+  backendStartPort: Number(process.env.PR_BACKEND_PORT || 7821),
+};
+
+const appDataDir = path.join(os.homedir(), 'AppData', 'Roaming', 'PR Desktop');
+const logDir = path.join(appDataDir, 'logs');
+const sillyTavernLog = path.join(logDir, 'sillytavern.log');
+const lmStudioLog = path.join(logDir, 'lmstudio.log');
+
+let sillyTavernProcess = null;
+let lmStudioServerProcess = null;
+let backendServer = null;
+let backendPort = null;
+
+function ensureRuntimeDirs() {
+  fs.mkdirSync(logDir, { recursive: true });
+  fs.mkdirSync(CONFIG.modelDir, { recursive: true });
+}
+
+function appendLog(file, message) {
+  ensureRuntimeDirs();
+  const line = `[${new Date().toISOString()}] ${message}`;
+  fs.appendFileSync(file, `${line}\n`, 'utf8');
+}
+
+function pipeProcessLogs(child, logFile, name) {
+  child.stdout?.on('data', (chunk) => appendLog(logFile, `${name}: ${chunk.toString().trimEnd()}`));
+  child.stderr?.on('data', (chunk) => appendLog(logFile, `${name} error: ${chunk.toString().trimEnd()}`));
+  child.on('exit', (code, signal) => appendLog(logFile, `${name} exited code=${code} signal=${signal || ''}`));
+}
+
+function requestText(url, timeoutMs = 2500) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode || 0, body });
+      });
+    });
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+    });
+
+    req.on('error', reject);
+  });
+}
+
+async function checkSillyTavern() {
+  try {
+    const response = await requestText(`${CONFIG.sillyTavernUrl}/`, 2500);
+    return {
+      ok: response.statusCode >= 200 && response.statusCode < 500,
+      statusCode: response.statusCode,
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+async function checkLmStudio() {
+  try {
+    const response = await requestText(`${CONFIG.lmStudioBaseUrl}/models`, 2500);
+    const parsed = JSON.parse(response.body);
+    const models = Array.isArray(parsed.data) ? parsed.data.map((item) => item.id) : [];
+    return {
+      ok: response.statusCode >= 200 && response.statusCode < 300,
+      statusCode: response.statusCode,
+      models,
+      preferredModelLoaded: models.includes(CONFIG.preferredModelId),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message,
+      models: [],
+      preferredModelLoaded: false,
+    };
+  }
+}
+
+function findLmStudioExe() {
+  const candidates = [
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'LM Studio', 'LM Studio.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'LMStudio', 'LM Studio.exe'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function findLmsCli() {
+  const candidates = [
+    path.join(os.homedir(), '.lmstudio', 'bin', 'lms.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'LM Studio', 'resources', 'lms.exe'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function startLmStudioApp() {
+  const exe = findLmStudioExe();
+  if (!exe) {
+    appendLog(lmStudioLog, 'LM Studio executable was not found.');
+    return { started: false, reason: 'LM Studio executable was not found.' };
+  }
+
+  childProcess.spawn(exe, [], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  }).unref();
+
+  appendLog(lmStudioLog, `Started LM Studio app: ${exe}`);
+  return { started: true, path: exe };
+}
+
+function startLmStudioServer() {
+  const lms = findLmsCli();
+  if (!lms) {
+    appendLog(lmStudioLog, 'lms.exe was not found; opening LM Studio app instead.');
+    return startLmStudioApp();
+  }
+
+  if (lmStudioServerProcess && !lmStudioServerProcess.killed) {
+    return { started: false, reason: 'LM Studio server process is already managed by PR Desktop.' };
+  }
+
+  lmStudioServerProcess = childProcess.spawn(lms, ['server', 'start', '--port', '1234'], {
+    cwd: path.dirname(lms),
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  pipeProcessLogs(lmStudioServerProcess, lmStudioLog, 'lms server');
+  appendLog(lmStudioLog, `Started lms server: ${lms}`);
+
+  return { started: true, path: lms };
+}
+
+function startSillyTavern() {
+  ensureRuntimeDirs();
+
+  if (sillyTavernProcess && !sillyTavernProcess.killed) {
+    return { started: false, reason: 'SillyTavern process is already managed by PR Desktop.' };
+  }
+
+  if (!fs.existsSync(path.join(CONFIG.sillyTavernDir, 'package.json'))) {
+    const reason = `SillyTavern directory not found: ${CONFIG.sillyTavernDir}`;
+    appendLog(sillyTavernLog, reason);
+    return { started: false, reason };
+  }
+
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  sillyTavernProcess = childProcess.spawn(npmCommand, ['start'], {
+    cwd: CONFIG.sillyTavernDir,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  pipeProcessLogs(sillyTavernProcess, sillyTavernLog, 'sillytavern');
+  appendLog(sillyTavernLog, `Started SillyTavern from ${CONFIG.sillyTavernDir}`);
+  return { started: true, path: CONFIG.sillyTavernDir };
+}
+
+async function getStatus() {
+  const [sillyTavern, lmStudio] = await Promise.all([checkSillyTavern(), checkLmStudio()]);
+  return {
+    config: CONFIG,
+    backendPort,
+    sillyTavern,
+    lmStudio,
+    paths: {
+      appDataDir,
+      logDir,
+      sillyTavernLog,
+      lmStudioLog,
+    },
+    managedProcesses: {
+      sillyTavern: Boolean(sillyTavernProcess && !sillyTavernProcess.killed),
+      lmStudioServer: Boolean(lmStudioServerProcess && !lmStudioServerProcess.killed),
+    },
+  };
+}
+
+async function startServices() {
+  const before = await getStatus();
+  const actions = [];
+
+  if (!before.lmStudio.ok) {
+    actions.push({ service: 'lmStudio', ...startLmStudioServer() });
+  }
+
+  if (!before.sillyTavern.ok) {
+    actions.push({ service: 'sillyTavern', ...startSillyTavern() });
+  }
+
+  return {
+    actions,
+    status: await getStatus(),
+  };
+}
+
+async function waitForSillyTavern(options = {}) {
+  const timeoutMs = options.timeoutMs || 90000;
+  const intervalMs = options.intervalMs || 1200;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const status = await getStatus();
+    options.onTick?.(status);
+    if (status.sillyTavern.ok) {
+      return status;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  return getStatus();
+}
+
+function sendJson(res, statusCode, payload) {
+  const json = JSON.stringify(payload);
+  res.writeHead(statusCode, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json; charset=utf-8',
+  });
+  res.end(json);
+}
+
+function listenOnAvailablePort(server, startPort, attempts = 20) {
+  return new Promise((resolve, reject) => {
+    let port = startPort;
+
+    const tryListen = () => {
+      server.once('error', (error) => {
+        if (error.code === 'EADDRINUSE' && port < startPort + attempts) {
+          port += 1;
+          tryListen();
+          return;
+        }
+        reject(error);
+      });
+
+      server.listen(port, '127.0.0.1', () => resolve(port));
+    };
+
+    tryListen();
+  });
+}
+
+async function createBackendServer(handlers = {}) {
+  if (backendServer) {
+    return { server: backendServer, port: backendPort };
+  }
+
+  backendServer = http.createServer(async (req, res) => {
+    if (req.method === 'OPTIONS') {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const url = new URL(req.url, 'http://127.0.0.1');
+
+    try {
+      if (url.pathname === '/api/status') {
+        sendJson(res, 200, await getStatus());
+        return;
+      }
+
+      if (url.pathname === '/api/start') {
+        sendJson(res, 200, await startServices());
+        return;
+      }
+
+      if (url.pathname === '/api/open/model-folder') {
+        handlers.openPath?.(CONFIG.modelDir);
+        sendJson(res, 200, { ok: true, path: CONFIG.modelDir });
+        return;
+      }
+
+      if (url.pathname === '/api/open/sillytavern-folder') {
+        handlers.openPath?.(CONFIG.sillyTavernDir);
+        sendJson(res, 200, { ok: true, path: CONFIG.sillyTavernDir });
+        return;
+      }
+
+      if (url.pathname === '/api/open/sillytavern') {
+        handlers.openExternal?.(CONFIG.sillyTavernUrl);
+        sendJson(res, 200, { ok: true, url: CONFIG.sillyTavernUrl });
+        return;
+      }
+
+      if (url.pathname === '/api/update/check') {
+        const result = await handlers.checkForUpdates?.();
+        sendJson(res, 200, result || { ok: false, reason: 'Update handler is not available.' });
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, reason: 'Not found' });
+    } catch (error) {
+      sendJson(res, 500, { ok: false, error: error.message });
+    }
+  });
+
+  backendPort = await listenOnAvailablePort(backendServer, CONFIG.backendStartPort);
+  return { server: backendServer, port: backendPort };
+}
+
+function stopSpawnedServices() {
+  for (const child of [sillyTavernProcess, lmStudioServerProcess]) {
+    if (child && !child.killed) {
+      child.kill();
+    }
+  }
+}
+
+module.exports = {
+  CONFIG,
+  createBackendServer,
+  getStatus,
+  startServices,
+  stopSpawnedServices,
+  waitForSillyTavern,
+};
