@@ -11,6 +11,8 @@ The multi-model proxy exposes `pr-agent` as the default model. It classifies req
 
 LM Studio loaded models are listed automatically. The `pr-qwen35-9b` local alias maps to the first loaded non-embedding LM Studio model when one is available.
 
+The launcher uses a Chinese desktop control panel and automatically keeps a WeChat-inspired SillyTavern chat theme installed with left/right bubbles and a compact input bar.
+
 Set `DEEPSEEK_API_KEY` before using DeepSeek models. Set `OPENAI_API_KEY` before using OpenAI models.
 
 ## Development

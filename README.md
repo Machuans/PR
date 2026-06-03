@@ -36,7 +36,8 @@
 - `build-pr-desktop.cmd`：本地打包并安装统一的 Windows 桌面端，桌面只保留一个 `PR Desktop` 快捷方式。
 - `start-pr-pc.cmd`：旧版备用启动器。优先使用打包后的 `PR Desktop` 应用。
 - `start-model-proxy.cmd`：只启动多模型中文代理后端，适合你已经在浏览器里打开 SillyTavern 时使用。
-- `configure-sillytavern-chinese-proxy.cmd`：把 SillyTavern 设置切到 `http://127.0.0.1:7821/v1`，并把系统提示改为中文输出优先。
+- `configure-sillytavern-chinese-proxy.cmd`：把 SillyTavern 设置切到 `http://127.0.0.1:7821/v1`，把系统提示改为中文输出优先，并安装微信风格聊天主题。
+- `install-sillytavern-wechat-theme.cmd`：只安装聊天页美化主题，写入 `E:\AI-Apps\SillyTavern\data\_css\user.css`，旧主题会自动备份。
 - `set-deepseek-key.cmd`：保存 DeepSeek API Key 到 Windows 用户环境变量。
 - `set-openai-key.cmd`：保存 OpenAI API Key 到 Windows 用户环境变量。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
@@ -56,12 +57,14 @@
 - 检查并启动 `E:\AI-Apps\SillyTavern` 的 SillyTavern 服务。
 - 提供统一多模型接口 `http://127.0.0.1:7821/v1`。
 - 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
+- 启动时自动检查并安装 SillyTavern 微信风格聊天主题。
 - 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
 - 直连 OpenAI API，模型名：`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.5-pro`、`gpt-4.1`、`gpt-4o`。
 - 提供智能体模型名 `pr-agent`：参考 CrewAI 的角色/任务分工和 AIRI 的本地陪伴优先思路，自动判断任务类型、注入专员提示词并选择本地/DeepSeek/OpenAI。
 - 保留智能模型名 `pr-auto`：只做轻量模型路由，不加专员分工提示词。
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
+- 桌面控制台采用中文状态面板，SillyTavern 聊天页可自动套用微信风格左右气泡、浅灰聊天底和紧凑输入栏。
 
 ### SillyTavern 多模型接口
 

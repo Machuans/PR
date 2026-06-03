@@ -23,6 +23,8 @@ const appDataDir = path.join(os.homedir(), 'AppData', 'Roaming', 'PR Desktop');
 const logDir = path.join(appDataDir, 'logs');
 const sillyTavernLog = path.join(logDir, 'sillytavern.log');
 const lmStudioLog = path.join(logDir, 'lmstudio.log');
+const themeMarker = 'PR WeChat-inspired chat theme';
+const themeFileName = 'sillytavern_wechat_user.css';
 
 let sillyTavernProcess = null;
 let lmStudioServerProcess = null;
@@ -38,6 +40,89 @@ function appendLog(file, message) {
   ensureRuntimeDirs();
   const line = `[${new Date().toISOString()}] ${message}`;
   fs.appendFileSync(file, `${line}\n`, 'utf8');
+}
+
+function timestamp() {
+  const pad = (value) => String(value).padStart(2, '0');
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    '-',
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('');
+}
+
+function getThemeTemplatePath() {
+  const candidates = [
+    path.resolve(__dirname, '..', '..', 'templates', themeFileName),
+    process.resourcesPath ? path.join(process.resourcesPath, 'templates', themeFileName) : null,
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function getSillyTavernThemeTarget() {
+  return path.join(CONFIG.sillyTavernDir, 'data', '_css', 'user.css');
+}
+
+function checkSillyTavernTheme() {
+  const target = getSillyTavernThemeTarget();
+  if (!fs.existsSync(target)) {
+    return { installed: false, target };
+  }
+
+  try {
+    const css = fs.readFileSync(target, 'utf8');
+    return { installed: css.includes(themeMarker), target };
+  } catch (error) {
+    return { installed: false, target, error: error.message };
+  }
+}
+
+function ensureSillyTavernTheme() {
+  const source = getThemeTemplatePath();
+  const target = getSillyTavernThemeTarget();
+
+  if (!source) {
+    const reason = `SillyTavern theme template was not found: ${themeFileName}`;
+    appendLog(sillyTavernLog, reason);
+    return { ok: false, installed: false, target, reason };
+  }
+
+  if (!fs.existsSync(CONFIG.sillyTavernDir)) {
+    const reason = `SillyTavern directory not found: ${CONFIG.sillyTavernDir}`;
+    appendLog(sillyTavernLog, reason);
+    return { ok: false, installed: false, target, reason };
+  }
+
+  try {
+    const cssDir = path.dirname(target);
+    const next = fs.readFileSync(source, 'utf8');
+    let backup = null;
+
+    fs.mkdirSync(cssDir, { recursive: true });
+
+    if (fs.existsSync(target)) {
+      const current = fs.readFileSync(target, 'utf8');
+      if (current === next) {
+        return { ok: true, installed: true, changed: false, target };
+      }
+
+      backup = path.join(cssDir, `user.css.pr-backup-${timestamp()}`);
+      fs.copyFileSync(target, backup);
+    }
+
+    fs.writeFileSync(target, next, 'utf8');
+    appendLog(sillyTavernLog, `Installed SillyTavern WeChat-style theme: ${target}`);
+    return { ok: true, installed: true, changed: true, target, backup };
+  } catch (error) {
+    appendLog(sillyTavernLog, `Failed to install SillyTavern theme: ${error.message}`);
+    return { ok: false, installed: false, target, error: error.message };
+  }
 }
 
 function pipeProcessLogs(child, logFile, name) {
@@ -240,6 +325,7 @@ async function getStatus() {
       smart: getSmartModelStatus(),
     },
     sillyTavern,
+    sillyTavernTheme: checkSillyTavernTheme(),
     lmStudio,
     paths: {
       appDataDir,
@@ -255,6 +341,7 @@ async function getStatus() {
 }
 
 async function startServices() {
+  const theme = ensureSillyTavernTheme();
   const before = await getStatus();
   const actions = [];
 
@@ -268,6 +355,7 @@ async function startServices() {
 
   return {
     actions,
+    theme,
     status: await getStatus(),
   };
 }
@@ -399,6 +487,7 @@ function stopSpawnedServices() {
 
 module.exports = {
   CONFIG,
+  ensureSillyTavernTheme,
   createBackendServer,
   getStatus,
   startServices,

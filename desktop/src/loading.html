@@ -8,10 +8,56 @@
   </head>
   <body>
     <main class="shell">
+      <section class="topbar" aria-label="应用状态">
+        <div>
+          <p class="eyebrow">PR Desktop</p>
+          <h1>本地 RP 工作台</h1>
+        </div>
+        <div class="connection-pill">
+          <span class="dot pending" id="header-dot"></span>
+          <span id="header-text">启动中</span>
+        </div>
+      </section>
+
       <section class="hero">
-        <p class="eyebrow">PR Desktop</p>
-        <h1>正在准备本地 RP 工作台</h1>
-        <p class="subcopy">自动检查 LM Studio、本地模型接口、DeepSeek、OpenAI 和 SillyTavern；服务就绪后会进入聊天界面，并由 PR Agent 自动分工和选择模型。</p>
+        <div class="hero-copy">
+          <p class="section-label">PR Agent</p>
+          <h2>自动分工、自动选模型</h2>
+          <p class="subcopy">本地模型负责沉浸式聊天；云端模型负责总结、世界书、角色卡、剧情规划和润色。</p>
+        </div>
+        <div class="agent-card" aria-label="智能体分工">
+          <div class="agent-row">
+            <span>RP</span>
+            <strong>LM Studio</strong>
+          </div>
+          <div class="agent-row">
+            <span>记忆</span>
+            <strong>DeepSeek / OpenAI</strong>
+          </div>
+          <div class="agent-row">
+            <span>设定</span>
+            <strong>Quality Model</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="mode-strip" aria-label="当前策略">
+        <article>
+          <span>默认入口</span>
+          <strong id="mode-agent">pr-agent</strong>
+        </article>
+        <article>
+          <span>本地模型</span>
+          <strong id="mode-local">等待检测</strong>
+        </article>
+        <article>
+          <span>云端补强</span>
+          <strong id="mode-cloud">自动回退本地</strong>
+        </article>
+        <article>
+          <span>聊天界面</span>
+          <strong id="mode-theme">微信风格气泡</strong>
+        </article>
       </section>
 
       <section class="status-grid" aria-label="服务状态">
@@ -81,6 +127,12 @@
         proxyText: document.querySelector('#proxy-text'),
         proxyUrl: document.querySelector('#proxy-url'),
         footer: document.querySelector('#footer'),
+        headerDot: document.querySelector('#header-dot'),
+        headerText: document.querySelector('#header-text'),
+        modeAgent: document.querySelector('#mode-agent'),
+        modeLocal: document.querySelector('#mode-local'),
+        modeCloud: document.querySelector('#mode-cloud'),
+        modeTheme: document.querySelector('#mode-theme'),
       };
 
       function setDot(dot, ok, pending = false) {
@@ -100,6 +152,8 @@
 
         const deepseek = status.proxy.providers.find((provider) => provider.id === 'deepseek');
         const openai = status.proxy.providers.find((provider) => provider.id === 'openai');
+        const loadedLocalModels = (status.lmStudio.models || [])
+          .filter((model) => !model.toLowerCase().includes('embedding'));
         const cloudNames = [
           deepseek?.configured ? 'DeepSeek' : null,
           openai?.configured ? 'OpenAI' : null,
@@ -109,8 +163,15 @@
           ? `PR Agent 已启用：${status.proxy.smart.defaultModel}，云端：${cloudNames.join(' / ')}`
           : `PR Agent 已启用：${status.proxy.smart.defaultModel}，云端未配置时自动回退本地`;
         state.proxyUrl.textContent = status.proxy.baseUrl || `http://127.0.0.1:${backendPort}/v1`;
+        state.modeAgent.textContent = status.proxy.smart.defaultModel || 'pr-agent';
+        state.modeLocal.textContent = status.lmStudio.ok ? (loadedLocalModels[0] || '已连接 LM Studio') : '等待 LM Studio';
+        state.modeCloud.textContent = cloudNames.length ? cloudNames.join(' / ') : '自动回退本地';
+        state.modeTheme.textContent = status.sillyTavernTheme?.installed ? '微信风格已安装' : '等待安装主题';
 
         state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
+        const allReady = status.lmStudio.ok && status.sillyTavern.ok && Boolean(status.proxy.baseUrl);
+        setDot(state.headerDot, allReady, !allReady);
+        state.headerText.textContent = allReady ? '全部就绪' : '正在准备';
       }
 
       async function getStatus() {
