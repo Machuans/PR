@@ -1,43 +1,32 @@
 /* PR WeChat-inspired chat theme for SillyTavern. */
 
 :root {
-    --SmartThemeBodyColor: #1f2328;
-    --SmartThemeEmColor: #178f49;
-    --SmartThemeQuoteColor: #4a8f73;
-    --SmartThemeBorderColor: rgba(0, 0, 0, 0.10);
-    --SmartThemeShadowColor: rgba(0, 0, 0, 0.08);
-    --SmartThemeBlurTintColor: rgba(247, 247, 247, 0.96);
-    --SmartThemeChatTintColor: #ededed;
-    --SmartThemeUserMesBlurTintColor: transparent;
-    --SmartThemeBotMesBlurTintColor: transparent;
+    --pr-chat-backdrop: rgba(237, 237, 237, 0.86);
+    --pr-panel: rgba(247, 247, 247, 0.94);
+    --pr-bubble: #ffffff;
+    --pr-user-bubble: #95ec69;
+    --pr-text: #1f2328;
+    --pr-user-text: #10230f;
+    --pr-muted: #6f767d;
+    --pr-soft-field: #f7f7f7;
 }
 
 html,
 body {
-    background:
-        linear-gradient(180deg, #f7f7f7 0, #ededed 180px, #ededed 100%) !important;
-    color: #1f2328 !important;
     font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
     letter-spacing: 0;
     text-shadow: none !important;
 }
 
-body,
-body.no-blur,
-body.noShadows {
-    --SmartThemeBlurTintColor: rgba(247, 247, 247, 0.96);
-    --SmartThemeChatTintColor: #ededed;
-}
-
 #sheld {
-    background: #ededed !important;
+    background: transparent !important;
 }
 
 #top-nav,
 #form_sheld {
-    color: #1f2328 !important;
+    color: var(--pr-text) !important;
     border-color: rgba(0, 0, 0, 0.08) !important;
-    background: rgba(247, 247, 247, 0.96) !important;
+    background: var(--pr-panel) !important;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
     text-shadow: none !important;
     backdrop-filter: blur(12px) saturate(1.08);
@@ -53,9 +42,9 @@ body.noShadows {
 .world_entry,
 .character_select,
 .bogus_folder_select {
-    color: #1f2328 !important;
+    color: var(--pr-text) !important;
     border-color: rgba(0, 0, 0, 0.10) !important;
-    background: rgba(255, 255, 255, 0.98) !important;
+    background: rgba(255, 255, 255, 0.96) !important;
     box-shadow: 0 16px 42px rgba(20, 25, 28, 0.14);
     text-shadow: none !important;
 }
@@ -65,9 +54,9 @@ body.noShadows {
     margin-inline: auto;
     padding: 18px 14px 128px;
     gap: 4px;
-    background: #ededed !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    background: var(--pr-chat-backdrop) !important;
+    backdrop-filter: blur(8px) saturate(1.05) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.05) !important;
     text-shadow: none !important;
 }
 
@@ -81,7 +70,7 @@ body.noShadows {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
-    color: #1f2328 !important;
+    color: var(--pr-text) !important;
     text-shadow: none !important;
 }
 
@@ -154,8 +143,8 @@ body.noShadows {
     padding: 10px 13px !important;
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 8px !important;
-    background: #ffffff !important;
-    color: #1f2328 !important;
+    background: var(--pr-bubble) !important;
+    color: var(--pr-text) !important;
     box-shadow: 0 1px 2px rgba(20, 25, 28, 0.08);
     font-size: 15.5px;
     font-weight: 500;
@@ -172,7 +161,7 @@ body.noShadows {
     width: 10px;
     height: 10px;
     content: "";
-    background: #ffffff;
+    background: var(--pr-bubble);
     border-left: 1px solid rgba(0, 0, 0, 0.06);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     transform: rotate(45deg);
@@ -180,16 +169,16 @@ body.noShadows {
 
 #chat .mes[is_user="true"] .mes_text,
 #chat .mes_user .mes_text {
-    background: #95ec69 !important;
+    background: var(--pr-user-bubble) !important;
     border-color: rgba(33, 121, 37, 0.14);
-    color: #10230f !important;
+    color: var(--pr-user-text) !important;
 }
 
 #chat .mes[is_user="true"] .mes_text::before,
 #chat .mes_user .mes_text::before {
     left: auto;
     right: -6px;
-    background: #95ec69;
+    background: var(--pr-user-bubble);
     border: 0;
     border-right: 1px solid rgba(33, 121, 37, 0.14);
     border-top: 1px solid rgba(33, 121, 37, 0.14);
@@ -233,7 +222,7 @@ body.noShadows {
 #chat .swipe_right,
 #chat .swipe_left,
 #chat .swipes-counter {
-    color: #6f767d !important;
+    color: var(--pr-muted) !important;
     text-shadow: none !important;
 }
 
@@ -247,7 +236,7 @@ body.noShadows {
     padding: 6px;
     border: 1px solid rgba(0, 0, 0, 0.09) !important;
     border-radius: 8px !important;
-    background: #ffffff !important;
+    background: var(--pr-bubble) !important;
     box-shadow: 0 -6px 24px rgba(20, 25, 28, 0.08);
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -258,8 +247,8 @@ body.no-blur #send_form,
 body.no-blur #send_form.compact,
 body #send_form.compact,
 #form_sheld #send_form {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
+    background: var(--pr-bubble) !important;
+    background-color: var(--pr-bubble) !important;
     background-image: none !important;
 }
 
@@ -269,8 +258,8 @@ input[type="text"],
 input[type="search"],
 input[type="number"],
 select {
-    color: #1f2328 !important;
-    background: #f7f7f7 !important;
+    color: var(--pr-text) !important;
+    background: var(--pr-soft-field) !important;
     border-color: rgba(0, 0, 0, 0.10) !important;
     border-radius: 8px !important;
     box-shadow: none !important;
@@ -331,7 +320,7 @@ button:hover {
 
 ::-webkit-scrollbar-thumb {
     background: rgba(120, 128, 136, 0.34);
-    border: 2px solid #ededed;
+    border: 2px solid rgba(237, 237, 237, 0.86);
     border-radius: 999px;
 }
 
