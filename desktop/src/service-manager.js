@@ -23,7 +23,7 @@ const appDataDir = path.join(os.homedir(), 'AppData', 'Roaming', 'PR Desktop');
 const logDir = path.join(appDataDir, 'logs');
 const sillyTavernLog = path.join(logDir, 'sillytavern.log');
 const lmStudioLog = path.join(logDir, 'lmstudio.log');
-const themeMarker = 'PR WeChat-inspired chat theme';
+const themeMarkers = ['PR Desktop chat app theme', 'PR WeChat-inspired chat theme'];
 const themeFileName = 'sillytavern_wechat_user.css';
 
 let sillyTavernProcess = null;
@@ -77,7 +77,7 @@ function checkSillyTavernTheme() {
 
   try {
     const css = fs.readFileSync(target, 'utf8');
-    return { installed: css.includes(themeMarker), target };
+    return { installed: themeMarkers.some((marker) => css.includes(marker)), target };
   } catch (error) {
     return { installed: false, target, error: error.message };
   }
