@@ -15,7 +15,7 @@ const CONFIG = {
   sillyTavernUrl: process.env.PR_SILLYTAVERN_URL || 'http://127.0.0.1:8000',
   lmStudioBaseUrl: process.env.PR_LMSTUDIO_URL || 'http://127.0.0.1:1234/v1',
   preferredModelId: process.env.PR_MODEL_ID || 'pr-qwen35-9b',
-  defaultProxyModelId: process.env.PR_PROXY_MODEL_ID || 'pr-auto',
+  defaultProxyModelId: process.env.PR_PROXY_MODEL_ID || 'pr-agent',
   backendStartPort: Number(process.env.PR_BACKEND_PORT || 7821),
 };
 

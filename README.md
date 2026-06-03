@@ -58,7 +58,8 @@
 - 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
 - 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
 - 直连 OpenAI API，模型名：`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.5-pro`、`gpt-4.1`、`gpt-4o`。
-- 提供智能模型名 `pr-auto`：常规 RP 走本地模型，记忆/总结优先走 DeepSeek Flash，长上下文/角色卡/设定/润色优先走 DeepSeek Pro；DeepSeek 不可用但 OpenAI 已配置时自动使用 OpenAI Fast/Quality，云端都不可用时回退本地模型。
+- 提供智能体模型名 `pr-agent`：参考 CrewAI 的角色/任务分工和 AIRI 的本地陪伴优先思路，自动判断任务类型、注入专员提示词并选择本地/DeepSeek/OpenAI。
+- 保留智能模型名 `pr-auto`：只做轻量模型路由，不加专员分工提示词。
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
 
@@ -68,7 +69,8 @@
 
 - Base URL：`http://127.0.0.1:7821/v1`
 - API Key：本地代理可填任意占位文本，例如 `pr-desktop`
-- 智能默认模型：`pr-auto`
+- 智能体默认模型：`pr-agent`
+- 轻量智能路由：`pr-auto`
 - 本地主力模型：`pr-qwen35-9b`
 - DeepSeek 速度优先：`deepseek-v4-flash`
 - DeepSeek 质量优先：`deepseek-v4-pro`
@@ -76,7 +78,16 @@
 - OpenAI 质量优先：`openai-quality` / `gpt-5.5`
 - OpenAI 高质量：`openai-premium` / `gpt-5.5-pro`
 
-代理会按模型名自动分流：`pr-auto` 自动识别 RP、总结、记忆、角色卡、世界书、长上下文等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API，OpenAI 模型走 OpenAI API。`pr-premium` / `auto-openai` 会在总结和规划类任务上优先使用 OpenAI。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+代理会按模型名自动分流：`pr-agent` 自动识别 RP、总结、记忆、角色卡、世界书、剧情导演、中文润色等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API，OpenAI 模型走 OpenAI API。LM Studio 当前加载的本地模型会自动加入模型列表，`pr-qwen35-9b` 会优先映射到实际加载的非 embedding 模型。`pr-premium` / `auto-openai` 会在总结和规划类任务上优先使用 OpenAI。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+
+### PR Agent 分工
+
+- `pr-agent`：总控智能体，自动判断任务并分派专员。
+- `pr-rp-agent`：角色扮演/陪伴专员，优先使用 LM Studio 本地模型。
+- `pr-memory-agent`：记忆整理专员，负责 Summary、关系进展、偏好、承诺和伏笔压缩。
+- `pr-lore-agent`：世界书/角色卡架构师，负责设定一致性、World Info 和角色卡结构。
+- `pr-director-agent`：剧情导演专员，负责节奏、冲突、伏笔和场景推进。
+- `pr-style-agent`：中文文风润色专员，负责中文语感、语气统一和改写。
 
 ### DeepSeek API Key
 

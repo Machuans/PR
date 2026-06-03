@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const DEFAULT_SETTINGS = 'E:\\AI-Apps\\SillyTavern\\data\\default-user\\settings.json';
 const DEFAULT_PROXY = 'http://127.0.0.1:7821/v1';
-const DEFAULT_MODEL = 'pr-auto';
+const DEFAULT_MODEL = 'pr-agent';
 
 const chinesePrompt = [
   '最高优先级语言规则：最终回复必须使用自然、流畅的简体中文。',

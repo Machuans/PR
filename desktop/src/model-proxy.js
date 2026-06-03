@@ -131,11 +131,156 @@ function getProxyForUrl(url) {
 }
 
 const DEFAULT_LOCAL_MODEL = getEnv('PR_MODEL_ID') || 'pr-qwen35-9b';
-const DEFAULT_PROXY_MODEL = getEnv('PR_PROXY_MODEL_ID') || 'pr-auto';
+const DEFAULT_PROXY_MODEL = getEnv('PR_PROXY_MODEL_ID') || 'pr-agent';
 const DEFAULT_OPENAI_FAST_MODEL = getEnv('PR_OPENAI_FAST_MODEL') || 'gpt-5.4-mini';
 const DEFAULT_OPENAI_QUALITY_MODEL = getEnv('PR_OPENAI_QUALITY_MODEL') || 'gpt-5.5';
 const DEFAULT_OPENAI_PREMIUM_MODEL = getEnv('PR_OPENAI_PREMIUM_MODEL') || 'gpt-5.5-pro';
 const SMART_MODEL_IDS = ['pr-auto', 'auto', 'smart', 'default', 'pr-premium', 'auto-openai'];
+const AGENT_MODES = [
+  {
+    id: 'pr-agent',
+    aliases: ['agent', 'crew-agent', 'agent-manager'],
+    scene: 'auto',
+    label: 'PR Agent Manager',
+    role: '任务管理智能体',
+    description: '自动判断任务类型，分派给 RP、记忆、设定、剧情导演或润色专员。',
+  },
+  {
+    id: 'pr-rp-agent',
+    aliases: ['agent-rp', 'rp-agent', 'companion-agent'],
+    scene: 'roleplay',
+    label: 'PR RP Agent',
+    role: '角色扮演专员',
+    description: '优先使用本地模型，负责沉浸式中文角色互动和陪伴感。',
+  },
+  {
+    id: 'pr-memory-agent',
+    aliases: ['agent-memory', 'memory-agent', 'summary-agent'],
+    scene: 'memory',
+    label: 'PR Memory Agent',
+    role: '记忆整理专员',
+    description: '负责 Summary、关系进展、偏好、承诺和伏笔压缩。',
+  },
+  {
+    id: 'pr-lore-agent',
+    aliases: ['agent-lore', 'lore-agent', 'world-agent'],
+    scene: 'lore',
+    label: 'PR Lore Agent',
+    role: '世界书与角色卡架构师',
+    description: '负责角色卡、世界书、设定一致性和长期剧情骨架。',
+  },
+  {
+    id: 'pr-director-agent',
+    aliases: ['agent-director', 'director-agent', 'plot-agent'],
+    scene: 'director',
+    label: 'PR Director Agent',
+    role: '剧情导演专员',
+    description: '负责剧情节奏、冲突、伏笔和场景推进建议。',
+  },
+  {
+    id: 'pr-style-agent',
+    aliases: ['agent-style', 'style-agent', 'rewrite-agent'],
+    scene: 'style',
+    label: 'PR Style Agent',
+    role: '中文文风润色专员',
+    description: '负责中文语感、语气统一、润色和改写。',
+  },
+];
+
+const SUMMARY_KEYWORDS = [
+  'summary',
+  'summarize',
+  'memory',
+  'lorebook',
+  'world info',
+  'author note',
+  '总结',
+  '摘要',
+  '记忆',
+  '回顾',
+  '归纳',
+  '提炼',
+  '世界书',
+  '作者注',
+  '聊天补全',
+  '关系进展',
+];
+const PLANNING_KEYWORDS = [
+  'analyze',
+  'analysis',
+  'outline',
+  'profile',
+  'character card',
+  'worldbuilding',
+  '分析',
+  '推理',
+  '规划',
+  '大纲',
+  '设定',
+  '角色卡',
+  '世界观',
+  '长篇',
+  '结构',
+];
+const STYLE_KEYWORDS = [
+  'rewrite',
+  'polish',
+  'style',
+  'tone',
+  '改写',
+  '润色',
+  '扩写',
+  '文风',
+  '语感',
+  '措辞',
+  '翻译',
+];
+const DIRECTOR_KEYWORDS = [
+  'plot',
+  'director',
+  'beat',
+  'pacing',
+  '剧情',
+  '导演',
+  '节奏',
+  '冲突',
+  '伏笔',
+  '转场',
+  '分镜',
+];
+
+const AGENT_PROMPTS = {
+  roleplay: [
+    '【PR Agent：角色扮演专员】',
+    '职责：维持当前角色、关系张力、陪伴感和中文网文语感。',
+    '边界：不要替用户行动，不要无故总结跳场，不要暴露模型分工。',
+    '策略：优先回应眼前互动；需要设定时只轻量补全，不抢剧情控制权。',
+  ].join('\n'),
+  memory: [
+    '【PR Agent：记忆整理专员】',
+    '职责：只保留长期有用的信息：关系变化、关键事件、偏好、承诺、未解决伏笔、角色状态。',
+    '输出：简洁、可贴入 Summary / Lorebook / Author Note 的中文条目。',
+    '边界：不要扩写剧情，不要添加没有依据的新事实。',
+  ].join('\n'),
+  lore: [
+    '【PR Agent：世界书与角色卡架构师】',
+    '职责：整理角色固定设定、世界规则、关系约束、触发条件和长期一致性。',
+    '输出：结构清晰、可执行、便于导入 SillyTavern World Info / 角色卡。',
+    '边界：保持虚构、成年、自愿互动前提；不要替用户决定角色行为。',
+  ].join('\n'),
+  director: [
+    '【PR Agent：剧情导演专员】',
+    '职责：判断剧情节奏、冲突、场景目标、伏笔回收和下一步推进。',
+    '输出：优先给可直接进入 RP 的正文；用户要求方案时再给简短分镜/节奏建议。',
+    '边界：不要把剧情讲成报告，不要过早总结或跳场。',
+  ].join('\n'),
+  style: [
+    '【PR Agent：中文文风润色专员】',
+    '职责：提升中文自然度、情绪细腻度、语气统一和画面感。',
+    '输出：只给润色后的正文或用户要求的格式。',
+    '边界：保留原意和必要术语，不添加无依据的新事实。',
+  ].join('\n'),
+};
 
 const PROVIDERS = [
   {
@@ -212,6 +357,7 @@ const PROVIDERS = [
 function getAllModelIds() {
   return [
     ...SMART_MODEL_IDS,
+    ...AGENT_MODES.flatMap((agent) => [agent.id, ...(agent.aliases || [])]),
     ...PROVIDERS.flatMap((provider) => provider.models.flatMap((model) => [model.id, ...(model.aliases || [])])),
   ];
 }
@@ -254,15 +400,50 @@ function hasAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
-function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
+function getAgentMode(modelId) {
+  return AGENT_MODES.find((agent) => agent.id === modelId || agent.aliases?.includes(modelId)) || null;
+}
+
+function isLocalModelAlias(modelId) {
+  return [
+    DEFAULT_LOCAL_MODEL,
+    'local/pr-qwen35-9b',
+    'local',
+    'lmstudio',
+    'pr-local',
+  ].includes(modelId);
+}
+
+function getUsableLocalModels(localModels = []) {
+  return [...new Set((Array.isArray(localModels) ? localModels : [])
+    .filter((modelId) => typeof modelId === 'string' && modelId.trim())
+    .filter((modelId) => !/embed|embedding|rerank/i.test(modelId)))];
+}
+
+function resolveLocalModel(modelId, localModels = []) {
+  const usable = getUsableLocalModels(localModels);
+  if (!usable.length) {
+    return modelId || DEFAULT_LOCAL_MODEL;
+  }
+
+  if (usable.includes(modelId)) {
+    return modelId;
+  }
+
+  if (!modelId || isLocalModelAlias(modelId)) {
+    return usable[0];
+  }
+
+  return modelId;
+}
+
+function getCloudModelForScene(scene, mode = DEFAULT_PROXY_MODEL) {
   const deepseek = PROVIDERS.find((provider) => provider.id === 'deepseek');
   const openai = PROVIDERS.find((provider) => provider.id === 'openai');
-  const text = messagesToText(messages);
-  const normalized = text.toLowerCase();
   const deepseekConfigured = deepseek ? isProviderConfigured(deepseek) : false;
   const openaiConfigured = openai ? isProviderConfigured(openai) : false;
-  const openaiPreferred = ['pr-premium', 'auto-openai'].includes(mode);
-  const summaryModel = openaiPreferred && openaiConfigured
+  const openaiPreferred = ['pr-premium', 'auto-openai', 'pr-agent-openai'].includes(mode);
+  const memoryModel = openaiPreferred && openaiConfigured
     ? DEFAULT_OPENAI_FAST_MODEL
     : deepseekConfigured
       ? 'deepseek-v4-flash'
@@ -277,6 +458,25 @@ function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
         ? DEFAULT_OPENAI_QUALITY_MODEL
         : DEFAULT_LOCAL_MODEL;
 
+  if (scene === 'memory' || scene === 'style') {
+    return memoryModel;
+  }
+
+  if (scene === 'lore' || scene === 'director' || scene === 'planning') {
+    return planningModel;
+  }
+
+  return DEFAULT_LOCAL_MODEL;
+}
+
+function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
+  const deepseek = PROVIDERS.find((provider) => provider.id === 'deepseek');
+  const openai = PROVIDERS.find((provider) => provider.id === 'openai');
+  const text = messagesToText(messages);
+  const normalized = text.toLowerCase();
+  const deepseekConfigured = deepseek ? isProviderConfigured(deepseek) : false;
+  const openaiConfigured = openai ? isProviderConfigured(openai) : false;
+
   if (getEnv('PR_SMART_LOCAL_ONLY') === 'true' || (!deepseekConfigured && !openaiConfigured)) {
     return {
       model: DEFAULT_LOCAL_MODEL,
@@ -285,61 +485,27 @@ function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
     };
   }
 
-  const summaryKeywords = [
-    'summary',
-    'summarize',
-    'memory',
-    'lorebook',
-    'world info',
-    'author note',
-    '总结',
-    '摘要',
-    '记忆',
-    '回顾',
-    '归纳',
-    '提炼',
-    '世界书',
-    '作者注',
-    '聊天补全',
-    '关系进展',
-  ];
-  const planningKeywords = [
-    'analyze',
-    'analysis',
-    'rewrite',
-    'polish',
-    'outline',
-    'profile',
-    'character card',
-    'worldbuilding',
-    '分析',
-    '推理',
-    '规划',
-    '大纲',
-    '设定',
-    '角色卡',
-    '世界观',
-    '改写',
-    '润色',
-    '扩写',
-    '长篇',
-    '伏笔',
-    '结构',
-  ];
-
-  if (hasAny(normalized, summaryKeywords)) {
+  if (hasAny(normalized, SUMMARY_KEYWORDS)) {
     return {
-      model: summaryModel,
+      model: getCloudModelForScene('memory', mode),
       reason: 'summary_memory',
       scene: 'memory',
     };
   }
 
-  if (text.length > 7000 || hasAny(normalized, planningKeywords)) {
+  if (text.length > 7000 || hasAny(normalized, PLANNING_KEYWORDS) || hasAny(normalized, DIRECTOR_KEYWORDS)) {
     return {
-      model: planningModel,
+      model: getCloudModelForScene('planning', mode),
       reason: text.length > 7000 ? 'long_context' : 'planning_or_rewrite',
       scene: 'planning',
+    };
+  }
+
+  if (hasAny(normalized, STYLE_KEYWORDS)) {
+    return {
+      model: getCloudModelForScene('style', mode),
+      reason: 'style_rewrite',
+      scene: 'style',
     };
   }
 
@@ -350,12 +516,69 @@ function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
   };
 }
 
-function findRoute(modelId, messages = []) {
+function classifyAgentScene(messages = [], mode = DEFAULT_PROXY_MODEL) {
+  const agentMode = getAgentMode(mode);
+  if (agentMode && agentMode.scene !== 'auto') {
+    return agentMode.scene;
+  }
+
+  const text = messagesToText(messages);
+  const normalized = text.toLowerCase();
+
+  if (hasAny(normalized, SUMMARY_KEYWORDS)) {
+    return 'memory';
+  }
+  if (hasAny(normalized, STYLE_KEYWORDS)) {
+    return 'style';
+  }
+  if (hasAny(normalized, DIRECTOR_KEYWORDS)) {
+    return 'director';
+  }
+  if (text.length > 7000 || hasAny(normalized, PLANNING_KEYWORDS)) {
+    return 'lore';
+  }
+  return 'roleplay';
+}
+
+function selectAgent(messages = [], mode = DEFAULT_PROXY_MODEL) {
+  const agentMode = getAgentMode(mode) || getAgentMode('pr-agent');
+  const scene = classifyAgentScene(messages, mode);
+  const model = scene === 'roleplay' ? DEFAULT_LOCAL_MODEL : getCloudModelForScene(scene, mode);
+  const prompt = AGENT_PROMPTS[scene] || AGENT_PROMPTS.roleplay;
+
+  return {
+    id: agentMode.id,
+    label: agentMode.label,
+    role: agentMode.role,
+    mode,
+    scene,
+    model,
+    prompt,
+    reason: `agent_${scene}`,
+  };
+}
+
+function findRoute(modelId, messages = [], localModels = []) {
   const normalized = modelId || DEFAULT_PROXY_MODEL;
+  const agentMode = getAgentMode(normalized);
+
+  if (agentMode) {
+    const agent = selectAgent(messages, normalized);
+    const route = findRoute(agent.model, messages, localModels);
+    return {
+      ...route,
+      requestedModel: normalized,
+      agent,
+      smart: true,
+      smartModel: agent.model,
+      smartReason: agent.reason,
+      smartScene: agent.scene,
+    };
+  }
 
   if (SMART_MODEL_IDS.includes(normalized)) {
     const smart = selectSmartModel(messages, normalized);
-    const route = findRoute(smart.model, messages);
+    const route = findRoute(smart.model, messages, localModels);
     return {
       ...route,
       requestedModel: normalized,
@@ -371,7 +594,7 @@ function findRoute(modelId, messages = []) {
       if (model.id === normalized || model.aliases?.includes(normalized)) {
         return {
           provider,
-          model: model.id,
+          model: provider.id === 'local' ? resolveLocalModel(model.id, localModels) : model.id,
           requestedModel: normalized,
         };
       }
@@ -380,7 +603,7 @@ function findRoute(modelId, messages = []) {
 
   return {
     provider: PROVIDERS[0],
-    model: normalized,
+    model: resolveLocalModel(normalized, localModels),
     requestedModel: normalized,
   };
 }
@@ -411,7 +634,29 @@ function getSmartModelStatus() {
       { scene: 'memory', model: 'deepseek-v4-flash / gpt-5.4-mini', description: '总结、记忆、世界书整理优先走 DeepSeek Flash；DeepSeek 不可用时可走 OpenAI Fast。' },
       { scene: 'planning', model: 'deepseek-v4-pro / gpt-5.5', description: '长上下文、角色卡、设定、润色和复杂规划优先走 DeepSeek Pro；DeepSeek 不可用时可走 OpenAI Quality。' },
     ],
+    agents: AGENT_MODES.map((agent) => ({
+      id: agent.id,
+      label: agent.label,
+      role: agent.role,
+      aliases: agent.aliases,
+      scene: agent.scene,
+      description: agent.description,
+    })),
   };
+}
+
+function withAgentSystemPrompt(messages, agent) {
+  if (!agent?.prompt || !Array.isArray(messages)) {
+    return messages;
+  }
+
+  return [
+    {
+      role: 'system',
+      content: agent.prompt,
+    },
+    ...messages,
+  ];
 }
 
 function withChineseSystemPrompt(messages, providerId) {
@@ -772,9 +1017,9 @@ async function sendUpstreamResponse(res, upstream, requestBody, provider, header
   }
 }
 
-async function handleChatCompletions(req, res) {
+async function handleChatCompletions(req, res, localModels = []) {
   const requestBody = await readJsonBody(req);
-  const route = findRoute(requestBody.model, requestBody.messages);
+  const route = findRoute(requestBody.model, requestBody.messages, localModels);
   const provider = route.provider;
 
   if (provider.apiKeyEnv && !getProviderApiKey(provider)) {
@@ -791,7 +1036,7 @@ async function handleChatCompletions(req, res) {
   const upstreamBody = {
     ...requestBody,
     model: route.model,
-    messages: withChineseSystemPrompt(requestBody.messages, provider.id),
+    messages: withChineseSystemPrompt(withAgentSystemPrompt(requestBody.messages, route.agent), provider.id),
   };
 
   if (provider.id === 'local') {
@@ -822,7 +1067,7 @@ function canHandleModelProxy(req, res, url, localModels = []) {
   }
 
   if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
-    handleChatCompletions(req, res).catch((error) => {
+    handleChatCompletions(req, res, localModels).catch((error) => {
       sendJson(res, 502, {
         error: {
           message: error.message,
@@ -846,6 +1091,7 @@ module.exports = {
   getEnv,
   getProviderStatus,
   getSmartModelStatus,
+  selectAgent,
   selectSmartModel,
   withChineseSystemPrompt,
 };
