@@ -7,9 +7,9 @@ PR Desktop is a Windows desktop wrapper for the local PR setup. It launches and 
 - PR multi-model proxy at `http://127.0.0.1:7821/v1`
 - The default model folder at `E:\AI-Models\PR`
 
-The multi-model proxy exposes `pr-auto` as the default model. It keeps normal RP chats on the local LM Studio model, sends memory/summary work to `deepseek-v4-flash`, and sends long-context planning, character-card, worldbuilding, and rewrite tasks to `deepseek-v4-pro` when DeepSeek is configured. Direct model IDs still work: `pr-qwen35-9b`, `deepseek-v4-flash`, and `deepseek-v4-pro`.
+The multi-model proxy exposes `pr-auto` as the default model. It keeps normal RP chats on the local LM Studio model, sends memory/summary work to `deepseek-v4-flash`, and sends long-context planning, character-card, worldbuilding, and rewrite tasks to `deepseek-v4-pro` when DeepSeek is configured. If DeepSeek is unavailable and OpenAI is configured, it can use OpenAI fast/quality models instead. Direct model IDs still work: `pr-qwen35-9b`, `deepseek-v4-flash`, `deepseek-v4-pro`, `openai-fast`, `openai-quality`, and `openai-premium`.
 
-Set `DEEPSEEK_API_KEY` before using DeepSeek models.
+Set `DEEPSEEK_API_KEY` before using DeepSeek models. Set `OPENAI_API_KEY` before using OpenAI models.
 
 ## Development
 

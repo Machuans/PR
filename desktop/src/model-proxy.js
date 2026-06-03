@@ -1,5 +1,7 @@
+const childProcess = require('node:child_process');
 const http = require('node:http');
 const https = require('node:https');
+const tls = require('node:tls');
 
 const CHINESE_SYSTEM_PROMPT_LINES = [
   '最高优先级语言规则：最终回复必须使用自然、流畅的简体中文。',
@@ -16,15 +18,130 @@ const FINAL_CHINESE_REMINDER = [
   '不要解释本条指令，不要提到语言转换。',
 ].join('\n');
 
-const DEFAULT_LOCAL_MODEL = process.env.PR_MODEL_ID || 'pr-qwen35-9b';
-const DEFAULT_PROXY_MODEL = process.env.PR_PROXY_MODEL_ID || 'pr-auto';
-const SMART_MODEL_IDS = ['pr-auto', 'auto', 'smart', 'default'];
+const USER_ENV_CACHE = new Map();
+let windowsProxyCache = undefined;
+
+function getWindowsUserEnv(name) {
+  if (process.platform !== 'win32') {
+    return '';
+  }
+
+  if (USER_ENV_CACHE.has(name)) {
+    return USER_ENV_CACHE.get(name);
+  }
+
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows';
+  const regExe = `${systemRoot}\\System32\\reg.exe`;
+  try {
+    const output = childProcess.execFileSync(
+      regExe,
+      ['query', 'HKCU\\Environment', '/v', name],
+      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    const line = output.split(/\r?\n/).find((entry) => entry.includes(name));
+    const match = line?.match(/\s+REG_\w+\s+(.+)$/);
+    const value = match?.[1]?.trim() || '';
+    USER_ENV_CACHE.set(name, value);
+    return value;
+  } catch {
+    // Fall through to PowerShell for unusual Windows installations.
+  }
+
+  try {
+    const escaped = name.replace(/'/g, "''");
+    const value = childProcess.execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-Command', `[Environment]::GetEnvironmentVariable('${escaped}', 'User')`],
+      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+    USER_ENV_CACHE.set(name, value);
+    return value;
+  } catch {
+    USER_ENV_CACHE.set(name, '');
+    return '';
+  }
+}
+
+function getEnv(name) {
+  return process.env[name] || getWindowsUserEnv(name);
+}
+
+function normalizeProxyUrl(value) {
+  const proxy = String(value || '').trim();
+  if (!proxy) {
+    return '';
+  }
+  return /^https?:\/\//i.test(proxy) ? proxy : `http://${proxy}`;
+}
+
+function selectProxyServer(proxyServer, protocol) {
+  const value = String(proxyServer || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  if (!value.includes('=')) {
+    return value;
+  }
+
+  const entries = Object.fromEntries(value.split(';').map((entry) => {
+    const [key, ...rest] = entry.split('=');
+    return [key.trim().toLowerCase(), rest.join('=').trim()];
+  }));
+  return entries[protocol] || entries.http || entries.https || '';
+}
+
+function getWindowsInternetProxy() {
+  if (process.platform !== 'win32') {
+    return '';
+  }
+
+  if (windowsProxyCache !== undefined) {
+    return windowsProxyCache;
+  }
+
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows';
+  const regExe = `${systemRoot}\\System32\\reg.exe`;
+  try {
+    const output = childProcess.execFileSync(
+      regExe,
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    const enabled = /ProxyEnable\s+REG_DWORD\s+0x1/i.test(output);
+    const server = output.match(/ProxyServer\s+REG_SZ\s+(.+)$/im)?.[1]?.trim() || '';
+    windowsProxyCache = enabled ? normalizeProxyUrl(selectProxyServer(server, 'https')) : '';
+    return windowsProxyCache;
+  } catch {
+    windowsProxyCache = '';
+    return '';
+  }
+}
+
+function getProxyForUrl(url) {
+  if (url.protocol !== 'https:') {
+    return '';
+  }
+
+  if (['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
+    return '';
+  }
+
+  return normalizeProxyUrl(getEnv('HTTPS_PROXY') || getEnv('HTTP_PROXY') || getWindowsInternetProxy());
+}
+
+const DEFAULT_LOCAL_MODEL = getEnv('PR_MODEL_ID') || 'pr-qwen35-9b';
+const DEFAULT_PROXY_MODEL = getEnv('PR_PROXY_MODEL_ID') || 'pr-auto';
+const DEFAULT_OPENAI_FAST_MODEL = getEnv('PR_OPENAI_FAST_MODEL') || 'gpt-5.4-mini';
+const DEFAULT_OPENAI_QUALITY_MODEL = getEnv('PR_OPENAI_QUALITY_MODEL') || 'gpt-5.5';
+const DEFAULT_OPENAI_PREMIUM_MODEL = getEnv('PR_OPENAI_PREMIUM_MODEL') || 'gpt-5.5-pro';
+const SMART_MODEL_IDS = ['pr-auto', 'auto', 'smart', 'default', 'pr-premium', 'auto-openai'];
 
 const PROVIDERS = [
   {
     id: 'local',
     label: 'LM Studio Local',
-    baseUrl: process.env.PR_LMSTUDIO_URL || 'http://127.0.0.1:1234/v1',
+    baseUrl: getEnv('PR_LMSTUDIO_URL') || 'http://127.0.0.1:1234/v1',
     apiKeyEnv: null,
     models: [
       {
@@ -37,7 +154,7 @@ const PROVIDERS = [
   {
     id: 'deepseek',
     label: 'DeepSeek API',
-    baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+    baseUrl: getEnv('DEEPSEEK_BASE_URL') || 'https://api.deepseek.com',
     apiKeyEnv: 'DEEPSEEK_API_KEY',
     models: [
       {
@@ -52,6 +169,44 @@ const PROVIDERS = [
       },
     ],
   },
+  {
+    id: 'openai',
+    label: 'OpenAI API',
+    baseUrl: getEnv('OPENAI_BASE_URL') || 'https://api.openai.com/v1',
+    apiKeyEnv: 'OPENAI_API_KEY',
+    models: [
+      {
+        id: DEFAULT_OPENAI_FAST_MODEL,
+        label: 'OpenAI GPT Fast',
+        aliases: ['openai-fast', 'openai-gpt-5.4-mini', 'openai/gpt-5.4-mini'],
+      },
+      {
+        id: DEFAULT_OPENAI_QUALITY_MODEL,
+        label: 'OpenAI GPT Quality',
+        aliases: ['openai-quality', 'openai-gpt-5.5', 'openai/gpt-5.5'],
+      },
+      {
+        id: DEFAULT_OPENAI_PREMIUM_MODEL,
+        label: 'OpenAI GPT Premium',
+        aliases: ['openai-premium', 'openai-gpt-5.5-pro', 'openai/gpt-5.5-pro'],
+      },
+      {
+        id: 'gpt-4.1',
+        label: 'OpenAI GPT-4.1',
+        aliases: ['openai-gpt-4.1', 'openai/gpt-4.1'],
+      },
+      {
+        id: 'gpt-4o',
+        label: 'OpenAI GPT-4o',
+        aliases: ['openai-gpt-4o', 'openai/gpt-4o'],
+      },
+      {
+        id: 'gpt-4o-mini',
+        label: 'OpenAI GPT-4o Mini',
+        aliases: ['openai-gpt-4o-mini', 'openai/gpt-4o-mini'],
+      },
+    ],
+  },
 ];
 
 function getAllModelIds() {
@@ -61,8 +216,12 @@ function getAllModelIds() {
   ];
 }
 
+function getProviderApiKey(provider) {
+  return provider.apiKeyEnv ? getEnv(provider.apiKeyEnv) : '';
+}
+
 function isProviderConfigured(provider) {
-  return provider.apiKeyEnv ? Boolean(process.env[provider.apiKeyEnv]) : true;
+  return provider.apiKeyEnv ? Boolean(getProviderApiKey(provider)) : true;
 }
 
 function textFromContent(content) {
@@ -95,16 +254,33 @@ function hasAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
-function selectSmartModel(messages = []) {
+function selectSmartModel(messages = [], mode = DEFAULT_PROXY_MODEL) {
   const deepseek = PROVIDERS.find((provider) => provider.id === 'deepseek');
+  const openai = PROVIDERS.find((provider) => provider.id === 'openai');
   const text = messagesToText(messages);
   const normalized = text.toLowerCase();
   const deepseekConfigured = deepseek ? isProviderConfigured(deepseek) : false;
+  const openaiConfigured = openai ? isProviderConfigured(openai) : false;
+  const openaiPreferred = ['pr-premium', 'auto-openai'].includes(mode);
+  const summaryModel = openaiPreferred && openaiConfigured
+    ? DEFAULT_OPENAI_FAST_MODEL
+    : deepseekConfigured
+      ? 'deepseek-v4-flash'
+      : openaiConfigured
+        ? DEFAULT_OPENAI_FAST_MODEL
+        : DEFAULT_LOCAL_MODEL;
+  const planningModel = openaiPreferred && openaiConfigured
+    ? DEFAULT_OPENAI_QUALITY_MODEL
+    : deepseekConfigured
+      ? 'deepseek-v4-pro'
+      : openaiConfigured
+        ? DEFAULT_OPENAI_QUALITY_MODEL
+        : DEFAULT_LOCAL_MODEL;
 
-  if (process.env.PR_SMART_LOCAL_ONLY === 'true' || !deepseekConfigured) {
+  if (getEnv('PR_SMART_LOCAL_ONLY') === 'true' || (!deepseekConfigured && !openaiConfigured)) {
     return {
       model: DEFAULT_LOCAL_MODEL,
-      reason: deepseekConfigured ? 'local_only' : 'deepseek_not_configured',
+      reason: deepseekConfigured || openaiConfigured ? 'local_only' : 'cloud_not_configured',
       scene: 'local_default',
     };
   }
@@ -153,7 +329,7 @@ function selectSmartModel(messages = []) {
 
   if (hasAny(normalized, summaryKeywords)) {
     return {
-      model: 'deepseek-v4-flash',
+      model: summaryModel,
       reason: 'summary_memory',
       scene: 'memory',
     };
@@ -161,7 +337,7 @@ function selectSmartModel(messages = []) {
 
   if (text.length > 7000 || hasAny(normalized, planningKeywords)) {
     return {
-      model: 'deepseek-v4-pro',
+      model: planningModel,
       reason: text.length > 7000 ? 'long_context' : 'planning_or_rewrite',
       scene: 'planning',
     };
@@ -178,7 +354,7 @@ function findRoute(modelId, messages = []) {
   const normalized = modelId || DEFAULT_PROXY_MODEL;
 
   if (SMART_MODEL_IDS.includes(normalized)) {
-    const smart = selectSmartModel(messages);
+    const smart = selectSmartModel(messages, normalized);
     const route = findRoute(smart.model, messages);
     return {
       ...route,
@@ -214,7 +390,8 @@ function getProviderStatus() {
     id: provider.id,
     label: provider.label,
     baseUrl: provider.baseUrl,
-    configured: provider.apiKeyEnv ? Boolean(process.env[provider.apiKeyEnv]) : true,
+    configured: provider.apiKeyEnv ? Boolean(getProviderApiKey(provider)) : true,
+    source: provider.apiKeyEnv && getProviderApiKey(provider) ? 'environment' : null,
     apiKeyEnv: provider.apiKeyEnv,
     models: provider.models.map((model) => ({
       id: model.id,
@@ -231,14 +408,14 @@ function getSmartModelStatus() {
     localFallback: DEFAULT_LOCAL_MODEL,
     rules: [
       { scene: 'roleplay', model: DEFAULT_LOCAL_MODEL, description: '常规 RP、陪伴和短聊天优先走本地模型。' },
-      { scene: 'memory', model: 'deepseek-v4-flash', description: '总结、记忆、世界书整理优先走 DeepSeek Flash。' },
-      { scene: 'planning', model: 'deepseek-v4-pro', description: '长上下文、角色卡、设定、润色和复杂规划优先走 DeepSeek Pro。' },
+      { scene: 'memory', model: 'deepseek-v4-flash / gpt-5.4-mini', description: '总结、记忆、世界书整理优先走 DeepSeek Flash；DeepSeek 不可用时可走 OpenAI Fast。' },
+      { scene: 'planning', model: 'deepseek-v4-pro / gpt-5.5', description: '长上下文、角色卡、设定、润色和复杂规划优先走 DeepSeek Pro；DeepSeek 不可用时可走 OpenAI Quality。' },
     ],
   };
 }
 
 function withChineseSystemPrompt(messages, providerId) {
-  if (process.env.PR_FORCE_CHINESE === 'false') {
+  if (getEnv('PR_FORCE_CHINESE') === 'false') {
     return Array.isArray(messages) ? messages : [];
   }
 
@@ -303,6 +480,16 @@ function sendJson(res, statusCode, payload) {
   res.end(json);
 }
 
+function getModelOwner(modelId) {
+  if (modelId.startsWith('deepseek') || modelId.startsWith('deepseek/')) {
+    return 'deepseek';
+  }
+  if (modelId.startsWith('gpt-') || modelId.startsWith('openai')) {
+    return 'openai';
+  }
+  return 'pr-desktop';
+}
+
 function createModelList(extraLocalModels = []) {
   const known = new Set();
   const data = [];
@@ -315,7 +502,7 @@ function createModelList(extraLocalModels = []) {
     data.push({
       id: modelId,
       object: 'model',
-      owned_by: modelId.startsWith('deepseek') || modelId.startsWith('deepseek/') ? 'deepseek' : 'pr-desktop',
+      owned_by: getModelOwner(modelId),
     });
   }
 
@@ -337,10 +524,85 @@ function createModelList(extraLocalModels = []) {
   };
 }
 
+function prepareProviderPayload(payload, provider) {
+  const prepared = { ...payload };
+
+  if (provider.id === 'openai' && prepared.max_tokens !== undefined && prepared.max_completion_tokens === undefined) {
+    prepared.max_completion_tokens = prepared.max_tokens;
+    delete prepared.max_tokens;
+  }
+
+  if (provider.id === 'openai') {
+    delete prepared.include_reasoning;
+  }
+
+  return prepared;
+}
+
+function forwardHttpsViaProxy(url, body, headers, proxyUrl) {
+  return new Promise((resolve, reject) => {
+    const proxy = new URL(proxyUrl);
+    const proxyPort = proxy.port || (proxy.protocol === 'https:' ? 443 : 8080);
+    const targetPort = url.port || 443;
+    const connect = http.request({
+      method: 'CONNECT',
+      hostname: proxy.hostname,
+      port: proxyPort,
+      path: `${url.hostname}:${targetPort}`,
+      headers: {
+        Host: `${url.hostname}:${targetPort}`,
+      },
+    });
+
+    connect.on('connect', (connectRes, socket) => {
+      if ((connectRes.statusCode || 500) < 200 || (connectRes.statusCode || 500) >= 300) {
+        socket.destroy();
+        reject(new Error(`Proxy CONNECT failed with status ${connectRes.statusCode || 0}`));
+        return;
+      }
+
+      const tlsSocket = tls.connect({
+        socket,
+        servername: url.hostname,
+      }, () => {
+        const req = https.request({
+          method: 'POST',
+          hostname: url.hostname,
+          port: targetPort,
+          path: `${url.pathname}${url.search}`,
+          createConnection: () => tlsSocket,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body),
+            ...headers,
+          },
+        }, (upstream) => {
+          resolve(upstream);
+        });
+
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+      });
+
+      tlsSocket.on('error', reject);
+    });
+
+    connect.on('error', reject);
+    connect.end();
+  });
+}
+
 function forwardJsonRequest(targetUrl, payload, headers = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(targetUrl);
     const body = JSON.stringify(payload);
+    const proxy = getProxyForUrl(url);
+    if (proxy) {
+      forwardHttpsViaProxy(url, body, headers, proxy).then(resolve, reject);
+      return;
+    }
+
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
       {
@@ -397,7 +659,7 @@ function stripReasoningFields(value) {
 }
 
 function needsChineseRewrite(text) {
-  if (process.env.PR_AUTO_CHINESE_REWRITE === 'false') {
+  if (getEnv('PR_AUTO_CHINESE_REWRITE') === 'false') {
     return false;
   }
 
@@ -439,8 +701,9 @@ async function rewriteTextToChinese(text, provider, model, headers) {
       },
     ],
   };
+  const upstreamBody = prepareProviderPayload(payload, provider);
 
-  const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, payload, headers);
+  const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, upstreamBody, headers);
   const body = await collectResponseBody(upstream);
   if ((upstream.statusCode || 500) < 200 || (upstream.statusCode || 500) >= 300) {
     return null;
@@ -487,7 +750,7 @@ async function sendUpstreamResponse(res, upstream, requestBody, provider, header
   const body = await collectResponseBody(upstream);
   const contentType = upstream.headers['content-type'] || 'application/json; charset=utf-8';
 
-  if (!contentType.includes('application/json') || process.env.PR_STRIP_REASONING === 'false') {
+  if (!contentType.includes('application/json') || getEnv('PR_STRIP_REASONING') === 'false') {
     res.writeHead(upstream.statusCode || 502, {
       'Access-Control-Allow-Origin': '*',
       'Content-Type': contentType,
@@ -514,7 +777,7 @@ async function handleChatCompletions(req, res) {
   const route = findRoute(requestBody.model, requestBody.messages);
   const provider = route.provider;
 
-  if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
+  if (provider.apiKeyEnv && !getProviderApiKey(provider)) {
     sendJson(res, 401, {
       error: {
         message: `${provider.label} is not configured. Set ${provider.apiKeyEnv} first.`,
@@ -537,13 +800,14 @@ async function handleChatCompletions(req, res) {
 
   const headers = {};
   if (provider.apiKeyEnv) {
-    headers.Authorization = `Bearer ${process.env[provider.apiKeyEnv]}`;
+    headers.Authorization = `Bearer ${getProviderApiKey(provider)}`;
   } else if (req.headers.authorization) {
     headers.Authorization = req.headers.authorization;
   }
 
-  const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, upstreamBody, headers);
-  await sendUpstreamResponse(res, upstream, upstreamBody, provider, headers);
+  const preparedBody = prepareProviderPayload(upstreamBody, provider);
+  const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, preparedBody, headers);
+  await sendUpstreamResponse(res, upstream, preparedBody, provider, headers);
 }
 
 function canHandleModelProxy(req, res, url, localModels = []) {
@@ -579,6 +843,7 @@ module.exports = {
   canHandleModelProxy,
   createModelList,
   findRoute,
+  getEnv,
   getProviderStatus,
   getSmartModelStatus,
   selectSmartModel,

@@ -38,6 +38,7 @@
 - `start-model-proxy.cmd`：只启动多模型中文代理后端，适合你已经在浏览器里打开 SillyTavern 时使用。
 - `configure-sillytavern-chinese-proxy.cmd`：把 SillyTavern 设置切到 `http://127.0.0.1:7821/v1`，并把系统提示改为中文输出优先。
 - `set-deepseek-key.cmd`：保存 DeepSeek API Key 到 Windows 用户环境变量。
+- `set-openai-key.cmd`：保存 OpenAI API Key 到 Windows 用户环境变量。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
 - `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
 - `scripts/download-models.ps1 -ModelSet advanced`：下载 27B 进阶候选，8-12GB 显存可能较慢。
@@ -56,7 +57,8 @@
 - 提供统一多模型接口 `http://127.0.0.1:7821/v1`。
 - 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
 - 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
-- 提供智能模型名 `pr-auto`：常规 RP 走本地模型，记忆/总结走 DeepSeek Flash，长上下文/角色卡/设定/润色走 DeepSeek Pro；没有 DeepSeek Key 时自动回退本地模型。
+- 直连 OpenAI API，模型名：`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.5-pro`、`gpt-4.1`、`gpt-4o`。
+- 提供智能模型名 `pr-auto`：常规 RP 走本地模型，记忆/总结优先走 DeepSeek Flash，长上下文/角色卡/设定/润色优先走 DeepSeek Pro；DeepSeek 不可用但 OpenAI 已配置时自动使用 OpenAI Fast/Quality，云端都不可用时回退本地模型。
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
 
@@ -70,8 +72,11 @@
 - 本地主力模型：`pr-qwen35-9b`
 - DeepSeek 速度优先：`deepseek-v4-flash`
 - DeepSeek 质量优先：`deepseek-v4-pro`
+- OpenAI 速度优先：`openai-fast` / `gpt-5.4-mini`
+- OpenAI 质量优先：`openai-quality` / `gpt-5.5`
+- OpenAI 高质量：`openai-premium` / `gpt-5.5-pro`
 
-代理会按模型名自动分流：`pr-auto` 自动识别 RP、总结、记忆、角色卡、世界书、长上下文等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+代理会按模型名自动分流：`pr-auto` 自动识别 RP、总结、记忆、角色卡、世界书、长上下文等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API，OpenAI 模型走 OpenAI API。`pr-premium` / `auto-openai` 会在总结和规划类任务上优先使用 OpenAI。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
 
 ### DeepSeek API Key
 
@@ -86,6 +91,23 @@
 ```powershell
 [Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "你的 DeepSeek Key", "User")
 [Environment]::SetEnvironmentVariable("DEEPSEEK_BASE_URL", "https://api.deepseek.com", "User")
+```
+
+设置后重启 PR Desktop。
+
+### OpenAI API Key
+
+先保存你的 OpenAI API Key：
+
+```powershell
+.\set-openai-key.cmd
+```
+
+也可以手动设置 Windows 用户环境变量：
+
+```powershell
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "你的 OpenAI Key", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://api.openai.com/v1", "User")
 ```
 
 设置后重启 PR Desktop。

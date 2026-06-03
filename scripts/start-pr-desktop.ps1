@@ -8,6 +8,7 @@ $DownloadScript = Join-Path $PSScriptRoot "download-models.ps1"
 $PcScript = Join-Path $PSScriptRoot "start-pr-pc.ps1"
 $UpdateScript = Join-Path $PSScriptRoot "update-pr-kit.ps1"
 $DeepSeekKeyScript = Join-Path $PSScriptRoot "set-deepseek-key.ps1"
+$OpenAIKeyScript = Join-Path $PSScriptRoot "set-openai-key.ps1"
 $ConfigureProxyScript = Join-Path $PSScriptRoot "configure-sillytavern-chinese-proxy.ps1"
 $ModelProxyScript = Join-Path $PSScriptRoot "start-model-proxy.ps1"
 $SillyTavernDir = $env:PR_SILLYTAVERN_DIR
@@ -114,6 +115,15 @@ function Set-DeepSeekKey {
   )
 }
 
+function Set-OpenAIKey {
+  Start-Process powershell.exe -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", "`"$OpenAIKeyScript`""
+  )
+}
+
 function Configure-SillyTavernChineseProxy {
   Start-Process powershell.exe -ArgumentList @(
     "-NoProfile",
@@ -148,9 +158,10 @@ while ($true) {
   Write-Host "8. Open SillyTavern local UI"
   Write-Host "9. Auto update PR kit"
   Write-Host "10. Set DeepSeek API key"
-  Write-Host "11. Configure SillyTavern Chinese proxy"
-  Write-Host "12. Start model proxy"
-  Write-Host "13. Exit"
+  Write-Host "11. Set OpenAI API key"
+  Write-Host "12. Configure SillyTavern Chinese proxy"
+  Write-Host "13. Start model proxy"
+  Write-Host "14. Exit"
   Write-Host ""
 
   $choice = Read-Host "Choose"
@@ -168,9 +179,10 @@ while ($true) {
     }
     "9" { Update-PRKit }
     "10" { Set-DeepSeekKey }
-    "11" { Configure-SillyTavernChineseProxy }
-    "12" { Start-ModelProxy }
-    "13" { break }
+    "11" { Set-OpenAIKey }
+    "12" { Configure-SillyTavernChineseProxy }
+    "13" { Start-ModelProxy }
+    "14" { break }
     default {
       Write-Host "Unknown choice."
       Start-Sleep -Seconds 1
