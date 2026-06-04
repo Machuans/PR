@@ -419,10 +419,13 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
+  width: min(760px, 100%);
   max-width: min(760px, 100%);
+  margin-inline: auto;
 }
 
 .message-row.system {
+  width: min(660px, 100%);
   max-width: min(660px, 100%);
 }
 
@@ -499,6 +502,18 @@ button:disabled {
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.bubble-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.bubble-actions .accent-button {
+  max-width: 100%;
 }
 
 .strategy-grid {
@@ -837,7 +852,7 @@ body.right-hidden .right-sidebar {
   }
 
   .composer-tool {
-    display: none;
+    display: inline-flex;
   }
 
   .send-button {
@@ -866,6 +881,11 @@ body.right-hidden .right-sidebar {
 
   .accent-button {
     max-width: 124px;
+  }
+
+  .bubble-actions .accent-button {
+    width: 100%;
+    max-width: 100%;
   }
 
   .message-row {
