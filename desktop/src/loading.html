@@ -363,9 +363,16 @@
         sillyTavernUrl: 'http://127.0.0.1:8000',
         currentRoute: '/chat',
         currentSettingsSection: 'appearance',
-        settings: null,
+        settingsSlices: {
+          appearance: null,
+          chat: null,
+          background: null,
+          advanced: null,
+        },
         memory: null,
         footerLockUntil: 0,
+        characterScanTimer: null,
+        settingsInputDebounceTimer: null,
       };
 
       const routeMeta = {
@@ -496,6 +503,18 @@
         state.footer.textContent = message;
         state.footerLockUntil = Date.now() + ttlMs;
       }
+
+      function debounce(fn, delayMs) {
+        let timer = null;
+        return (...args) => {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn(...args), delayMs);
+        };
+      }
+
+      const syncSettingInputDebounced = debounce((section, key, value) => {
+        updateSettingsSlice(section, { [key]: value });
+      }, 260);
 
       function renderStatus(status) {
         setDot(state.lmDot, status.lmStudio.ok);
@@ -640,12 +659,62 @@
         `).join('');
       }
 
-      async function loadCharacters() {
-        state.charactersCount.textContent = '正在加载';
-        state.charactersSummary.textContent = '正在扫描 PR 本地角色目录与 SillyTavern 角色目录。';
+      function renderCharacterScanStatus(scan) {
+        if (!scan) {
+          return;
+        }
+
+        if (scan.status === 'done' && scan.result) {
+          clearTimeout(state.characterScanTimer);
+          state.characterScanTimer = null;
+          renderCharacters(scan.result);
+          return;
+        }
+
+        if (scan.status === 'error') {
+          clearTimeout(state.characterScanTimer);
+          state.characterScanTimer = null;
+          state.charactersCount.textContent = '扫描失败';
+          state.charactersSummary.textContent = scan.error || '角色目录扫描失败';
+          return;
+        }
+
+        const progress = scan.progress || {};
+        state.charactersCount.textContent = '扫描中';
+        state.charactersSummary.textContent = `${progress.phase || '正在扫描'} · 已扫目录 ${progress.scannedDirs || 0} 个，文件 ${progress.scannedFiles || 0} 个，发现 ${progress.foundCharacters || 0} 个角色。`;
+      }
+
+      async function pollCharacterScan(scanId) {
+        clearTimeout(state.characterScanTimer);
+
+        const tick = async () => {
+          try {
+            const payload = await fetchJson(`/api/characters/scan-status?id=${encodeURIComponent(scanId || '')}`);
+            renderCharacterScanStatus(payload.scan);
+            if (payload.scan?.status === 'running') {
+              state.characterScanTimer = setTimeout(tick, 260);
+            }
+          } catch (error) {
+            state.charactersCount.textContent = '扫描失败';
+            state.charactersSummary.textContent = error.message;
+          }
+        };
+
+        state.characterScanTimer = setTimeout(tick, 220);
+      }
+
+      async function loadCharacters(options = {}) {
+        clearTimeout(state.characterScanTimer);
+        state.charactersCount.textContent = '准备扫描';
+        state.charactersSummary.textContent = '扫描任务已交给后台线程，界面可以继续操作。';
 
         try {
-          renderCharacters(await fetchJson('/api/characters'));
+          const query = options.force ? '?force=true' : '';
+          const payload = await fetchJson(`/api/characters/scan${query}`);
+          renderCharacterScanStatus(payload.scan);
+          if (payload.scan?.status === 'running') {
+            pollCharacterScan(payload.scan.id);
+          }
         } catch (error) {
           state.charactersCount.textContent = '加载失败';
           state.charactersSummary.textContent = error.message;
@@ -660,7 +729,7 @@
 
         const result = await postAction('/api/characters/create-template', { name });
         setFooter(result.ok ? `已创建角色：${result.character.name}` : (result.reason || '创建失败'));
-        await loadCharacters();
+        await loadCharacters({ force: true });
       }
 
       function renderMemory(payload) {
@@ -692,13 +761,70 @@
         setFooter('记忆摘要已保存');
       }
 
+      function updateSettingsSlice(section, patch) {
+        const current = state.settingsSlices[section] || {};
+        state.settingsSlices[section] = {
+          ...current,
+          ...patch,
+        };
+      }
+
+      function applySettingsPayload(settings = {}) {
+        for (const section of Object.keys(settingsSections)) {
+          state.settingsSlices[section] = {
+            ...(settings[section] || {}),
+          };
+        }
+      }
+
+      function getCurrentSettingsSlice() {
+        return state.settingsSlices[state.currentSettingsSection] || {};
+      }
+
+      function readSettingFieldValue(field) {
+        const type = field.dataset.settingType;
+        if (type === 'checkbox') {
+          return field.checked;
+        }
+        if (type === 'number') {
+          return Number(field.value);
+        }
+        return field.value;
+      }
+
+      function collectCurrentSettingsPatch() {
+        const sectionPatch = {};
+        state.settingsForm.querySelectorAll('[data-setting-field]').forEach((field) => {
+          sectionPatch[field.dataset.settingField] = readSettingFieldValue(field);
+        });
+        updateSettingsSlice(state.currentSettingsSection, sectionPatch);
+        return sectionPatch;
+      }
+
+      function bindSettingsFormControls() {
+        state.settingsForm.querySelectorAll('[data-setting-field]').forEach((field) => {
+          const sync = () => {
+            const key = field.dataset.settingField;
+            const value = readSettingFieldValue(field);
+            if (field.dataset.settingType === 'text' || field.dataset.settingType === 'number' || field.dataset.settingType === 'textarea') {
+              syncSettingInputDebounced(state.currentSettingsSection, key, value);
+            } else {
+              updateSettingsSlice(state.currentSettingsSection, { [key]: value });
+            }
+          };
+
+          field.addEventListener('input', sync);
+          field.addEventListener('change', sync);
+        });
+      }
+
       function renderSettingsForm() {
         const section = settingsSections[state.currentSettingsSection] || settingsSections.appearance;
-        const sectionState = state.settings?.[state.currentSettingsSection] || {};
+        const sectionState = getCurrentSettingsSlice();
         state.settingsSectionTitle.textContent = section.title;
         state.settingsSectionSummary.textContent = section.summary;
         state.settingsFormTitle.textContent = section.title;
-        state.settingsStatus.textContent = state.settings ? '已加载本地设置' : '正在加载';
+        state.settingsStatus.textContent = sectionState ? '已加载本地设置' : '正在加载';
 
         state.settingsForm.innerHTML = section.fields.map((field) => {
           const value = sectionState[field.key];
@@ -726,6 +852,7 @@
             </div>
           `;
         }).join('');
+        bindSettingsFormControls();
       }
 
       async function loadSettings() {
@@ -733,7 +860,7 @@
 
         try {
           const payload = await fetchJson('/api/settings');
-          state.settings = payload.settings;
+          applySettingsPayload(payload.settings);
           renderSettingsForm();
         } catch (error) {
           state.settingsStatus.textContent = `加载失败：${error.message}`;
@@ -741,25 +868,14 @@
       }
 
       async function saveSettings() {
-        const sectionPatch = {};
-        state.settingsForm.querySelectorAll('[data-setting-field]').forEach((field) => {
-          const key = field.dataset.settingField;
-          const type = field.dataset.settingType;
-          if (type === 'checkbox') {
-            sectionPatch[key] = field.checked;
-          } else if (type === 'number') {
-            sectionPatch[key] = Number(field.value);
-          } else {
-            sectionPatch[key] = field.value;
-          }
-        });
+        const sectionPatch = collectCurrentSettingsPatch();
 
         const payload = await postAction('/api/settings', {
           settings: {
             [state.currentSettingsSection]: sectionPatch,
           },
         });
-        state.settings = payload.settings;
+        applySettingsPayload(payload.settings);
         renderSettingsForm();
         setFooter(`${settingsSections[state.currentSettingsSection].title} 已保存`);
       }
@@ -820,7 +936,9 @@
       document.querySelector('#right-toggle').addEventListener('click', openSettingsRoute);
       document.querySelector('#composer-settings-button').addEventListener('click', openSettingsRoute);
 
-      document.querySelector('#refresh-characters-button').addEventListener('click', loadCharacters);
+      document.querySelector('#refresh-characters-button').addEventListener('click', () => {
+        loadCharacters({ force: true });
+      });
       document.querySelector('#create-template-character-button').addEventListener('click', createTemplateCharacter);
       document.querySelector('#side-create-template-character-button').addEventListener('click', createTemplateCharacter);
       document.querySelector('#open-characters-folder-button').addEventListener('click', () => {

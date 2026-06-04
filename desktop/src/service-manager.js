@@ -4,6 +4,7 @@ const http = require('node:http');
 const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
+const { Worker } = require('node:worker_threads');
 const {
   canHandleModelProxy,
   getProviderStatus,
@@ -85,6 +86,9 @@ let sillyTavernProcess = null;
 let lmStudioServerProcess = null;
 let backendServer = null;
 let backendPort = null;
+let characterScanJob = null;
+let characterScanCache = null;
+let characterScanSequence = 0;
 
 function ensureRuntimeDirs() {
   fs.mkdirSync(logDir, { recursive: true });
@@ -281,41 +285,152 @@ function getSillyTavernCharacterDirs() {
     .filter((dir) => fs.existsSync(dir));
 }
 
-function getCharactersState() {
-  ensureRuntimeDirs();
-  const template = readCharacterTemplate();
-  const worldInfo = readWorldInfoTemplate();
-  const localCharacters = listCharacterFilesInDir(localCharacterDir, 'PR Local');
-  const sillyTavernDirs = getSillyTavernCharacterDirs();
-  const sillyTavernCharacters = sillyTavernDirs.flatMap((dir) => (
-    listCharacterFilesInDir(dir, `SillyTavern:${path.basename(path.dirname(dir))}`)
-  ));
+function getCharacterScanStatus() {
+  if (characterScanJob) {
+    return {
+      id: characterScanJob.id,
+      status: characterScanJob.status,
+      progress: characterScanJob.progress,
+      startedAt: characterScanJob.startedAt,
+      finishedAt: characterScanJob.finishedAt || null,
+      error: characterScanJob.error || null,
+      result: characterScanJob.status === 'done' ? characterScanJob.result : null,
+    };
+  }
 
-  const templateCharacter = template.data ? {
-    id: 'template:character-card-v2',
-    name: template.data.data?.name || '角色卡模板',
-    subtitle: 'PR 结构化角色卡模板',
-    description: template.data.data?.description || '',
-    tags: template.data.data?.tags || [],
-    source: 'Template',
-    filePath: template.path,
-    type: 'template',
-  } : null;
+  if (characterScanCache) {
+    return {
+      id: characterScanCache.id,
+      status: 'done',
+      progress: characterScanCache.progress,
+      startedAt: characterScanCache.startedAt,
+      finishedAt: characterScanCache.finishedAt,
+      error: null,
+      result: characterScanCache.result,
+    };
+  }
 
   return {
-    ok: true,
-    characters: [
-      ...(templateCharacter ? [templateCharacter] : []),
-      ...localCharacters,
-      ...sillyTavernCharacters,
-    ],
-    template,
-    worldInfo,
-    paths: {
+    id: null,
+    status: 'idle',
+    progress: {
+      phase: '等待扫描',
+      scannedDirs: 0,
+      scannedFiles: 0,
+      foundCharacters: 0,
+    },
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    result: null,
+  };
+}
+
+function startCharacterScan(options = {}) {
+  ensureRuntimeDirs();
+
+  if (!options.force && characterScanJob && characterScanJob.status === 'running') {
+    return getCharacterScanStatus();
+  }
+
+  if (!options.force && characterScanCache) {
+    return getCharacterScanStatus();
+  }
+
+  const id = `character-scan-${Date.now()}-${characterScanSequence += 1}`;
+  const progress = {
+    phase: '准备扫描',
+    scannedDirs: 0,
+    scannedFiles: 0,
+    foundCharacters: 0,
+  };
+  const worker = new Worker(path.join(__dirname, 'character-scan-worker.js'), {
+    workerData: {
       localCharacterDir,
       sillyTavernDir: CONFIG.sillyTavernDir,
-      sillyTavernCharacterDirs: sillyTavernDirs,
+      characterTemplatePath: getTemplatePath('character_card_v2_template.json'),
+      worldInfoTemplatePath: getTemplatePath('world_info_entries.jsonl'),
     },
+  });
+
+  const job = {
+    id,
+    status: 'running',
+    progress,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    result: null,
+    error: null,
+    worker,
+  };
+
+  job.promise = new Promise((resolve, reject) => {
+    worker.on('message', (message) => {
+      if (message.type === 'progress') {
+        job.progress = message.progress;
+      } else if (message.type === 'result') {
+        job.status = 'done';
+        job.finishedAt = new Date().toISOString();
+        job.result = message.payload;
+        job.progress = {
+          phase: '完成',
+          scannedDirs: job.progress.scannedDirs,
+          scannedFiles: job.progress.scannedFiles,
+          foundCharacters: message.payload?.characters?.length || job.progress.foundCharacters,
+        };
+        characterScanCache = {
+          id: job.id,
+          status: job.status,
+          progress: job.progress,
+          startedAt: job.startedAt,
+          finishedAt: job.finishedAt,
+          result: job.result,
+        };
+        resolve(job.result);
+      } else if (message.type === 'error') {
+        const error = new Error(message.error || 'Character scan worker failed.');
+        job.status = 'error';
+        job.finishedAt = new Date().toISOString();
+        job.error = error.message;
+        reject(error);
+      }
+    });
+
+    worker.on('error', (error) => {
+      job.status = 'error';
+      job.finishedAt = new Date().toISOString();
+      job.error = error.message;
+      reject(error);
+    });
+
+    worker.on('exit', (code) => {
+      if (code !== 0 && job.status === 'running') {
+        const error = new Error(`Character scan worker exited with code ${code}.`);
+        job.status = 'error';
+        job.finishedAt = new Date().toISOString();
+        job.error = error.message;
+        reject(error);
+      }
+    });
+  }).finally(() => {
+    job.worker = null;
+  });
+
+  characterScanJob = job;
+  return getCharacterScanStatus();
+}
+
+async function getCharactersState(options = {}) {
+  const current = getCharacterScanStatus();
+  if (current.status === 'done' && current.result && !options.force) {
+    return current.result;
+  }
+
+  startCharacterScan(options);
+  const result = await characterScanJob.promise;
+  return {
+    ...result,
+    scan: getCharacterScanStatus(),
   };
 }
 
@@ -333,6 +448,10 @@ function createCharacterFromTemplate(options = {}) {
 
   const filePath = path.join(localCharacterDir, `${safeFileName(name)}-${timestamp()}.json`);
   writeJsonFile(filePath, next);
+  characterScanCache = null;
+  if (characterScanJob?.status !== 'running') {
+    characterScanJob = null;
+  }
   return {
     ok: true,
     character: summarizeCharacterJson(filePath, 'PR Local'),
@@ -1040,7 +1159,18 @@ async function createBackendServer(handlers = {}) {
       }
 
       if (url.pathname === '/api/characters') {
-        sendJson(res, 200, getCharactersState());
+        sendJson(res, 200, await getCharactersState({ force: url.searchParams.get('force') === 'true' }));
+        return;
+      }
+
+      if (url.pathname === '/api/characters/scan') {
+        const force = url.searchParams.get('force') === 'true' || req.method === 'POST';
+        sendJson(res, 200, { ok: true, scan: startCharacterScan({ force }) });
+        return;
+      }
+
+      if (url.pathname === '/api/characters/scan-status') {
+        sendJson(res, 200, { ok: true, scan: getCharacterScanStatus() });
         return;
       }
 
