@@ -7,110 +7,195 @@
     <link rel="stylesheet" href="./loading.css">
   </head>
   <body>
-    <main class="shell">
-      <section class="topbar" aria-label="应用状态">
-        <div>
-          <p class="eyebrow">PR Desktop</p>
-          <h1>本地 RP 工作台</h1>
+    <div class="app-shell">
+      <aside class="sidebar left-sidebar" id="left-sidebar" aria-label="会话与角色">
+        <div class="brand-row">
+          <div class="brand-mark">PR</div>
+          <div class="brand-copy">
+            <p>PR Desktop</p>
+            <strong>角色工作台</strong>
+          </div>
+          <button class="icon-button sidebar-collapse" id="sidebar-toggle" type="button" aria-label="折叠左侧栏">‹</button>
         </div>
-        <div class="connection-pill">
-          <span class="dot pending" id="header-dot"></span>
-          <span id="header-text">启动中</span>
+
+        <section class="sidebar-section">
+          <div class="section-title">会话</div>
+          <button class="list-item active" type="button">
+            <span class="item-main">未命名聊天</span>
+            <span class="item-meta">本地 RP</span>
+          </button>
+          <button class="list-item" type="button">
+            <span class="item-main">角色广场</span>
+            <span class="item-meta">Chub / 导入</span>
+          </button>
+          <button class="list-item" type="button">
+            <span class="item-main">记忆摘要</span>
+            <span class="item-meta">Summary / Lorebook</span>
+          </button>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="section-title">角色</div>
+          <button class="role-row selected" type="button">
+            <span class="avatar-token">AI</span>
+            <span>
+              <strong>Assistant</strong>
+              <small>默认助手</small>
+            </span>
+          </button>
+          <button class="role-row" type="button">
+            <span class="avatar-token muted">RP</span>
+            <span>
+              <strong>角色卡</strong>
+              <small>等待导入</small>
+            </span>
+          </button>
+        </section>
+
+        <div class="sidebar-footer">
+          <button class="sidebar-action" id="open-st-button" type="button">打开 SillyTavern</button>
         </div>
-      </section>
+      </aside>
 
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="section-label">PR Agent</p>
-          <h2>自动分工、自动选模型</h2>
-          <p class="subcopy">本地模型负责沉浸式聊天；云端模型负责总结、世界书、角色卡、剧情规划和润色。</p>
-        </div>
-        <div class="agent-card" aria-label="智能体分工">
-          <div class="agent-row">
-            <span>RP</span>
-            <strong>LM Studio</strong>
+      <main class="main-column" aria-label="核心对话区">
+        <header class="main-topbar">
+          <button class="icon-button mobile-sidebar-button" id="mobile-sidebar-button" type="button" aria-label="显示侧边栏">☰</button>
+          <div class="topbar-title">
+            <p>当前工作流</p>
+            <h1>本地模型对话准备</h1>
           </div>
-          <div class="agent-row">
-            <span>记忆</span>
-            <strong>DeepSeek / OpenAI</strong>
+          <div class="topbar-actions">
+            <div class="connection-pill">
+              <span class="dot pending" id="header-dot"></span>
+              <span id="header-text">启动中</span>
+            </div>
+            <button class="primary-button" id="start-button" type="button">启动</button>
+            <button class="accent-button" id="load-local-model-button" type="button" disabled>加载本地模型</button>
+            <details class="more-menu">
+              <summary>更多</summary>
+              <div class="menu-popover">
+                <button id="open-models-button" type="button">打开模型目录</button>
+                <button id="update-button" type="button">检查更新</button>
+                <button id="install-update-button" type="button" disabled>安装更新</button>
+                <button id="open-releases-button" type="button">发布页</button>
+              </div>
+            </details>
+            <button class="ghost-button" id="right-toggle" type="button">设置</button>
           </div>
-          <div class="agent-row">
-            <span>设定</span>
-            <strong>Quality Model</strong>
-          </div>
-        </div>
-      </section>
+        </header>
 
-      <section class="mode-strip" aria-label="当前策略">
-        <article>
-          <span>默认入口</span>
-          <strong id="mode-agent">pr-agent</strong>
-        </article>
-        <article>
-          <span>本地模型</span>
-          <strong id="mode-local">等待检测</strong>
-        </article>
-        <article>
-          <span>云端补强</span>
-          <strong id="mode-cloud">自动回退本地</strong>
-        </article>
-        <article>
-          <span>聊天界面</span>
-          <strong id="mode-theme">微信风格气泡</strong>
-        </article>
-      </section>
+        <section class="conversation-surface" aria-label="服务消息流">
+          <article class="message-row assistant">
+            <div class="message-avatar">PR</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>PR Agent</strong>
+                <span id="mode-agent">pr-agent</span>
+              </div>
+              <p>本地模型负责对话，云端模型负责记忆、总结、角色卡和世界书整理。</p>
+            </div>
+          </article>
 
-      <section class="status-grid" aria-label="服务状态">
-        <article class="status-panel" id="lm-panel">
-          <div class="status-head">
-            <span class="dot" id="lm-dot"></span>
-            <h2>LM Studio</h2>
-          </div>
-          <p id="lm-text">检查中</p>
-          <small id="lm-model">等待模型状态</small>
-        </article>
+          <article class="message-row system">
+            <div class="message-avatar status-avatar">LM</div>
+            <div class="bubble compact">
+              <div class="inline-status">
+                <span class="dot" id="lm-dot"></span>
+                <strong>LM Studio</strong>
+                <span id="lm-text">检查中</span>
+              </div>
+              <small id="lm-model">等待模型状态</small>
+            </div>
+          </article>
 
-        <article class="status-panel" id="st-panel">
-          <div class="status-head">
-            <span class="dot" id="st-dot"></span>
-            <h2>SillyTavern</h2>
-          </div>
-          <p id="st-text">检查中</p>
-          <small id="st-url">http://127.0.0.1:8000</small>
-        </article>
+          <article class="message-row system">
+            <div class="message-avatar status-avatar">ST</div>
+            <div class="bubble compact">
+              <div class="inline-status">
+                <span class="dot" id="st-dot"></span>
+                <strong>SillyTavern</strong>
+                <span id="st-text">检查中</span>
+              </div>
+              <small id="st-url">http://127.0.0.1:8000</small>
+            </div>
+          </article>
 
-        <article class="status-panel" id="update-panel">
-          <div class="status-head">
-            <span class="dot" id="update-dot"></span>
-            <h2>自动更新</h2>
-          </div>
-          <p id="update-text">等待检查</p>
-          <small>GitHub Release 更新源</small>
-        </article>
+          <article class="message-row assistant">
+            <div class="message-avatar">AI</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>多模型策略</strong>
+                <span id="mode-theme">微信风格气泡</span>
+              </div>
+              <div class="strategy-grid">
+                <div>
+                  <span>本地模型</span>
+                  <strong id="mode-local">等待检测</strong>
+                </div>
+                <div>
+                  <span>云端补强</span>
+                  <strong id="mode-cloud">自动回退本地</strong>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
 
-        <article class="status-panel" id="proxy-panel">
-          <div class="status-head">
+        <footer class="composer-bar" aria-label="底部操作栏">
+          <button class="icon-button composer-tool" type="button" aria-label="设置">≡</button>
+          <textarea readonly rows="1" aria-label="消息输入框" placeholder="进入 SillyTavern 后开始聊天。"></textarea>
+          <button class="send-button" id="copy-proxy-button" type="button">复制接口</button>
+        </footer>
+      </main>
+
+      <aside class="sidebar right-sidebar" id="right-sidebar" aria-label="模型与设置">
+        <section class="panel-card status-panel" id="proxy-panel">
+          <div class="panel-head">
             <span class="dot" id="proxy-dot"></span>
-            <h2>多模型代理</h2>
+            <div>
+              <h2>多模型代理</h2>
+              <p id="proxy-text">等待后端</p>
+            </div>
           </div>
-          <p id="proxy-text">等待后端</p>
-          <small id="proxy-url">http://127.0.0.1:7821/v1</small>
-        </article>
-      </section>
+          <code id="proxy-url">http://127.0.0.1:7821/v1</code>
+        </section>
 
-      <section class="actions" aria-label="常用操作">
-        <button id="start-button" type="button">启动/重试服务</button>
-        <button id="load-local-model-button" type="button" disabled>加载本地模型</button>
-        <button id="open-models-button" type="button">打开模型目录</button>
-        <button id="copy-proxy-button" type="button">复制多模型接口</button>
-        <button id="open-st-button" type="button">浏览器打开 SillyTavern</button>
-        <button id="update-button" type="button">检查更新</button>
-        <button id="install-update-button" type="button" disabled>安装更新</button>
-        <button id="open-releases-button" type="button">发布页</button>
-      </section>
+        <section class="panel-card status-panel" id="update-panel">
+          <div class="panel-head">
+            <span class="dot" id="update-dot"></span>
+            <div>
+              <h2>自动更新</h2>
+              <p id="update-text">等待检查</p>
+            </div>
+          </div>
+          <small>GitHub Release 更新源</small>
+        </section>
 
-      <p class="footer" id="footer">后端连接中</p>
-    </main>
+        <section class="panel-card">
+          <div class="panel-title">设置分组</div>
+          <div class="settings-list">
+            <button type="button">
+              <span>基础外观</span>
+              <small>主题 / 字体 / 页面宽度</small>
+            </button>
+            <button type="button">
+              <span>聊天显示</span>
+              <small>气泡 / 间距 / 头像</small>
+            </button>
+            <button type="button">
+              <span>背景效果</span>
+              <small>背景图 / 模糊 / 透明度</small>
+            </button>
+            <button type="button">
+              <span>高级设置</span>
+              <small>CSS / 性能 / 视觉效果</small>
+            </button>
+          </div>
+        </section>
+
+        <p class="footer" id="footer">后端连接中</p>
+      </aside>
+    </div>
 
     <script>
       const params = new URLSearchParams(location.search);
@@ -241,17 +326,49 @@
         renderUpdate(payload.state);
       }
 
+      function closeMenus() {
+        document.querySelectorAll('details[open]').forEach((menu) => {
+          menu.open = false;
+        });
+      }
+
+      document.querySelector('#sidebar-toggle').addEventListener('click', () => {
+        document.body.classList.toggle('left-collapsed');
+      });
+
+      document.querySelector('#mobile-sidebar-button').addEventListener('click', () => {
+        document.body.classList.toggle('left-open');
+      });
+
+      document.querySelector('#right-toggle').addEventListener('click', () => {
+        if (window.matchMedia('(max-width: 1120px)').matches) {
+          document.body.classList.toggle('right-open');
+          document.body.classList.remove('right-hidden');
+          return;
+        }
+        document.body.classList.toggle('right-hidden');
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('.more-menu')) {
+          closeMenus();
+        }
+      });
+
       document.querySelector('#start-button').addEventListener('click', async () => {
+        closeMenus();
         state.footer.textContent = '正在启动服务';
         await postAction('/api/start');
         await getStatus();
       });
 
       document.querySelector('#open-models-button').addEventListener('click', () => {
+        closeMenus();
         postAction('/api/open/model-folder');
       });
 
       document.querySelector('#load-local-model-button').addEventListener('click', async () => {
+        closeMenus();
         if (!state.preferredLoadModel) {
           return;
         }
@@ -275,6 +392,7 @@
       });
 
       document.querySelector('#update-button').addEventListener('click', async () => {
+        closeMenus();
         setDot(state.updateDot, false, true);
         state.updateText.textContent = '正在检查更新';
         const result = await postAction('/api/update/check');
@@ -288,6 +406,7 @@
       });
 
       document.querySelector('#install-update-button').addEventListener('click', async () => {
+        closeMenus();
         setDot(state.updateDot, false, true);
         state.updateText.textContent = '正在准备安装更新';
         const result = await postAction('/api/update/install');
@@ -298,6 +417,7 @@
       });
 
       document.querySelector('#open-releases-button').addEventListener('click', () => {
+        closeMenus();
         postAction('/api/update/releases');
       });
 
