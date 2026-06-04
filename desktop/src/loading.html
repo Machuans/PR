@@ -20,15 +20,15 @@
 
         <section class="sidebar-section">
           <div class="section-title">会话</div>
-          <button class="list-item active" type="button">
+          <button class="list-item active" type="button" data-route="/chat">
             <span class="item-main">未命名聊天</span>
             <span class="item-meta">本地 RP</span>
           </button>
-          <button class="list-item" type="button">
+          <button class="list-item" type="button" data-route="/characters">
             <span class="item-main">角色广场</span>
             <span class="item-meta">Chub / 导入</span>
           </button>
-          <button class="list-item" type="button">
+          <button class="list-item" type="button" data-route="/memory">
             <span class="item-main">记忆摘要</span>
             <span class="item-meta">Summary / Lorebook</span>
           </button>
@@ -36,14 +36,14 @@
 
         <section class="sidebar-section">
           <div class="section-title">角色</div>
-          <button class="role-row selected" type="button">
+          <button class="role-row selected" type="button" data-route="/chat">
             <span class="avatar-token">AI</span>
             <span>
               <strong>Assistant</strong>
               <small>默认助手</small>
             </span>
           </button>
-          <button class="role-row" type="button">
+          <button class="role-row" type="button" data-route="/characters">
             <span class="avatar-token muted">RP</span>
             <span>
               <strong>角色卡</strong>
@@ -83,7 +83,7 @@
           </div>
         </header>
 
-        <section class="conversation-surface" aria-label="服务消息流">
+        <section class="conversation-surface" aria-label="服务消息流" data-route-view="/chat">
           <article class="message-row assistant">
             <div class="message-avatar">PR</div>
             <div class="bubble">
@@ -143,6 +143,107 @@
           </article>
         </section>
 
+        <section class="conversation-surface" aria-label="角色广场" data-route-view="/characters" hidden>
+          <article class="message-row assistant">
+            <div class="message-avatar">RP</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>角色广场</strong>
+                <span id="characters-count">正在加载</span>
+              </div>
+              <p id="characters-summary">正在扫描 PR 本地角色目录与 SillyTavern 角色目录。</p>
+              <div class="bubble-actions">
+                <button class="accent-button" id="refresh-characters-button" type="button">刷新角色</button>
+                <button class="accent-button" id="create-template-character-button" type="button">创建模板角色</button>
+                <button class="accent-button" id="open-characters-folder-button" type="button">打开角色目录</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="message-row system">
+            <div class="message-avatar status-avatar">CC</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>角色列表</strong>
+                <span id="characters-source">本地 / SillyTavern</span>
+              </div>
+              <div class="strategy-grid" id="characters-list">
+                <div>
+                  <span>加载中</span>
+                  <strong>等待后端返回角色数据</strong>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="conversation-surface" aria-label="记忆摘要" data-route-view="/memory" hidden>
+          <article class="message-row assistant">
+            <div class="message-avatar">ME</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>记忆摘要</strong>
+                <span id="memory-status">正在加载</span>
+              </div>
+              <p>这里保存用户偏好、关系进展、已发生剧情、角色承诺和禁止触碰的话题。内容会写入本地后端。</p>
+              <div class="bubble-actions">
+                <button class="accent-button" id="refresh-memory-button" type="button">刷新记忆</button>
+                <button class="accent-button" id="save-memory-button" type="button">保存记忆</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="message-row system">
+            <div class="message-avatar status-avatar">SM</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong>剧情摘要</strong>
+                <span>Summary</span>
+              </div>
+              <textarea id="memory-summary-input" rows="5" aria-label="剧情摘要" placeholder="当前故事发展到哪里。"></textarea>
+              <div class="strategy-grid">
+                <div>
+                  <span>用户称呼</span>
+                  <strong id="memory-name-display">未设置</strong>
+                </div>
+                <div>
+                  <span>关系状态</span>
+                  <strong id="memory-relationship-display">未设置</strong>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="conversation-surface" aria-label="全局设置" data-route-view="/settings" hidden>
+          <article class="message-row assistant">
+            <div class="message-avatar">ST</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong id="settings-section-title">基础外观</strong>
+                <span id="settings-status">正在加载</span>
+              </div>
+              <p id="settings-section-summary">主题、字体大小、页面宽度和头像样式会保存到本地设置文件。</p>
+              <div class="bubble-actions">
+                <button class="accent-button" id="refresh-settings-button" type="button">刷新设置</button>
+                <button class="accent-button" id="save-settings-button" type="button">保存设置</button>
+                <button class="accent-button" id="open-settings-folder-button" type="button">打开设置目录</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="message-row system">
+            <div class="message-avatar status-avatar">DB</div>
+            <div class="bubble">
+              <div class="bubble-head">
+                <strong id="settings-form-title">基础外观</strong>
+                <span>Local JSON</span>
+              </div>
+              <div class="strategy-grid" id="settings-form"></div>
+            </div>
+          </article>
+        </section>
+
         <footer class="composer-bar" aria-label="底部操作栏">
           <button class="icon-button composer-tool" id="composer-settings-button" type="button" aria-label="设置">≡</button>
           <textarea readonly rows="1" aria-label="消息输入框" placeholder="进入 SillyTavern 后开始聊天。"></textarea>
@@ -151,7 +252,7 @@
       </main>
 
       <aside class="sidebar right-sidebar" id="right-sidebar" aria-label="模型与设置">
-        <section class="panel-card status-panel" id="proxy-panel">
+        <section class="panel-card status-panel" id="proxy-panel" data-route-side="/chat /settings /memory">
           <div class="panel-head">
             <span class="dot" id="proxy-dot"></span>
             <div>
@@ -162,7 +263,7 @@
           <code id="proxy-url">http://127.0.0.1:7821/v1</code>
         </section>
 
-        <section class="panel-card status-panel" id="update-panel">
+        <section class="panel-card status-panel" id="update-panel" data-route-side="/chat /settings /memory">
           <div class="panel-head">
             <span class="dot" id="update-dot"></span>
             <div>
@@ -173,22 +274,40 @@
           <small>GitHub Release 发布后才会推送</small>
         </section>
 
-        <section class="panel-card">
+        <section class="panel-card" data-route-side="/characters" hidden>
+          <div class="panel-title">角色管理</div>
+          <div class="settings-list">
+            <button type="button" id="side-create-template-character-button">
+              <span>角色卡</span>
+              <small>身份 / 性格 / 关系</small>
+            </button>
+            <button type="button" data-route="/memory">
+              <span>角色记忆</span>
+              <small>短期 / 长期 / 摘要</small>
+            </button>
+            <button type="button" id="side-open-characters-folder-button">
+              <span>导入来源</span>
+              <small>Chub / 本地文件</small>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel-card" data-route-side="/chat /settings /memory">
           <div class="panel-title">设置分组</div>
           <div class="settings-list">
-            <button type="button">
+            <button type="button" data-settings-section="appearance">
               <span>基础外观</span>
               <small>主题 / 字体 / 页面宽度</small>
             </button>
-            <button type="button">
+            <button type="button" data-settings-section="chat">
               <span>聊天显示</span>
               <small>气泡 / 间距 / 头像</small>
             </button>
-            <button type="button">
+            <button type="button" data-settings-section="background">
               <span>背景效果</span>
               <small>背景图 / 模糊 / 透明度</small>
             </button>
-            <button type="button">
+            <button type="button" data-settings-section="advanced">
               <span>高级设置</span>
               <small>CSS / 性能 / 视觉效果</small>
             </button>
@@ -223,14 +342,159 @@
         modeLocal: document.querySelector('#mode-local'),
         modeCloud: document.querySelector('#mode-cloud'),
         modeTheme: document.querySelector('#mode-theme'),
+        topbarEyebrow: document.querySelector('.topbar-title p'),
+        topbarHeading: document.querySelector('.topbar-title h1'),
+        charactersCount: document.querySelector('#characters-count'),
+        charactersSummary: document.querySelector('#characters-summary'),
+        charactersSource: document.querySelector('#characters-source'),
+        charactersList: document.querySelector('#characters-list'),
+        memoryStatus: document.querySelector('#memory-status'),
+        memorySummaryInput: document.querySelector('#memory-summary-input'),
+        memoryNameDisplay: document.querySelector('#memory-name-display'),
+        memoryRelationshipDisplay: document.querySelector('#memory-relationship-display'),
+        settingsStatus: document.querySelector('#settings-status'),
+        settingsSectionTitle: document.querySelector('#settings-section-title'),
+        settingsSectionSummary: document.querySelector('#settings-section-summary'),
+        settingsFormTitle: document.querySelector('#settings-form-title'),
+        settingsForm: document.querySelector('#settings-form'),
         loadLocalModelButton: document.querySelector('#load-local-model-button'),
         installUpdateButton: document.querySelector('#install-update-button'),
         preferredLoadModel: null,
         sillyTavernUrl: 'http://127.0.0.1:8000',
+        currentRoute: '/chat',
+        currentSettingsSection: 'appearance',
+        settings: null,
+        memory: null,
+        footerLockUntil: 0,
       };
+
+      const routeMeta = {
+        '/chat': {
+          eyebrow: '当前工作流',
+          title: '本地模型对话准备',
+        },
+        '/characters': {
+          eyebrow: '角色管理',
+          title: '角色广场与角色卡',
+        },
+        '/memory': {
+          eyebrow: '记忆系统',
+          title: '记忆摘要与剧情进展',
+        },
+        '/settings': {
+          eyebrow: '全局配置',
+          title: '应用设置',
+        },
+      };
+
+      const settingsSections = {
+        appearance: {
+          title: '基础外观',
+          summary: '主题、字体大小、页面宽度和头像样式会保存到本地设置文件。',
+          fields: [
+            { key: 'theme', label: '主题', type: 'select', options: ['dark', 'light'] },
+            { key: 'fontSize', label: '字体大小', type: 'number' },
+            { key: 'pageWidth', label: '页面宽度', type: 'select', options: ['compact', 'comfortable', 'wide'] },
+            { key: 'avatarStyle', label: '头像样式', type: 'select', options: ['rounded', 'circle', 'square'] },
+          ],
+        },
+        chat: {
+          title: '聊天显示',
+          summary: '聊天风格、气泡宽度、消息间距和头像开关会写入本地设置。',
+          fields: [
+            { key: 'style', label: '聊天风格', type: 'select', options: ['wechat', 'classic', 'compact'] },
+            { key: 'bubbleWidth', label: '气泡宽度', type: 'number' },
+            { key: 'messageSpacing', label: '消息间距', type: 'number' },
+            { key: 'showAvatar', label: '显示头像', type: 'checkbox' },
+          ],
+        },
+        background: {
+          title: '背景效果',
+          summary: '背景图、模糊强度、透明度和阴影设置会保存在本地。',
+          fields: [
+            { key: 'image', label: '背景图路径', type: 'text' },
+            { key: 'blur', label: '模糊强度', type: 'number' },
+            { key: 'opacity', label: '透明度', type: 'number' },
+            { key: 'shadow', label: '阴影', type: 'checkbox' },
+          ],
+        },
+        advanced: {
+          title: '高级设置',
+          summary: '自定义 CSS、视觉效果和性能选项会作为高级配置保存。',
+          fields: [
+            { key: 'customCss', label: '自定义 CSS', type: 'textarea' },
+            { key: 'visualEffects', label: '视觉效果', type: 'checkbox' },
+            { key: 'performanceMode', label: '性能模式', type: 'checkbox' },
+          ],
+        },
+      };
+
+      function normalizeRoute(route) {
+        return routeMeta[route] ? route : '/chat';
+      }
+
+      function getRouteFromLocation() {
+        const url = new URL(location.href);
+        const routeFromQuery = url.searchParams.get('route');
+        return normalizeRoute(routeFromQuery || location.pathname);
+      }
+
+      function renderRoute(route) {
+        const normalizedRoute = normalizeRoute(route);
+        const meta = routeMeta[normalizedRoute];
+        state.currentRoute = normalizedRoute;
+        state.topbarEyebrow.textContent = meta.eyebrow;
+        state.topbarHeading.textContent = meta.title;
+
+        document.querySelectorAll('[data-route]').forEach((button) => {
+          const isActive = button.dataset.route === normalizedRoute;
+          button.setAttribute('aria-current', isActive ? 'page' : 'false');
+          if (button.classList.contains('list-item')) {
+            button.classList.toggle('active', isActive);
+          }
+          if (button.classList.contains('role-row')) {
+            button.classList.toggle('selected', isActive);
+          }
+        });
+
+        document.querySelectorAll('[data-route-view]').forEach((view) => {
+          view.hidden = view.dataset.routeView !== normalizedRoute;
+        });
+
+        document.querySelectorAll('[data-route-side]').forEach((panel) => {
+          const allowedRoutes = panel.dataset.routeSide.split(/\s+/).filter(Boolean);
+          panel.hidden = !allowedRoutes.includes(normalizedRoute);
+        });
+
+        loadRouteData(normalizedRoute);
+      }
+
+      function pushRoute(route, replace = false) {
+        const normalizedRoute = normalizeRoute(route);
+        const url = new URL(location.href);
+        url.searchParams.set('route', normalizedRoute);
+        history[replace ? 'replaceState' : 'pushState']({ route: normalizedRoute }, '', url);
+        renderRoute(normalizedRoute);
+        document.body.classList.remove('left-open');
+      }
+
+      document.querySelectorAll('[data-route]').forEach((button) => {
+        button.addEventListener('click', () => {
+          pushRoute(button.dataset.route);
+        });
+      });
+
+      window.addEventListener('popstate', () => {
+        renderRoute(getRouteFromLocation());
+      });
 
       function setDot(dot, ok, pending = false) {
         dot.className = `dot ${ok ? 'ok' : pending ? 'pending' : 'bad'}`;
+      }
+
+      function setFooter(message, ttlMs = 3000) {
+        state.footer.textContent = message;
+        state.footerLockUntil = Date.now() + ttlMs;
       }
 
       function renderStatus(status) {
@@ -287,7 +551,9 @@
         state.modeCloud.textContent = cloudNames.length ? cloudNames.join(' / ') : '自动回退本地';
         state.modeTheme.textContent = status.sillyTavernTheme?.installed ? '微信风格已安装' : '等待安装主题';
 
-        state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
+        if (Date.now() > state.footerLockUntil) {
+          state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
+        }
         const allReady = status.lmStudio.ok && status.sillyTavern.ok && Boolean(status.proxy.baseUrl);
         setDot(state.headerDot, allReady, !allReady);
         state.headerText.textContent = allReady ? '全部就绪' : '正在准备';
@@ -324,6 +590,196 @@
         return payload;
       }
 
+      async function fetchJson(path) {
+        const response = await fetch(`${apiBase}${path}`);
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.reason || payload.error || `Request failed: ${path}`);
+        }
+        return payload;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        }[char]));
+      }
+
+      function renderCharacters(payload) {
+        const characters = payload.characters || [];
+        const localCount = characters.filter((character) => character.source === 'PR Local').length;
+        const sillyTavernCount = characters.filter((character) => character.source?.startsWith('SillyTavern')).length;
+        state.charactersCount.textContent = `${characters.length} 个角色`;
+        state.charactersSummary.textContent = `已接入 PR 本地角色 ${localCount} 个，SillyTavern 角色 ${sillyTavernCount} 个。`;
+        state.charactersSource.textContent = payload.paths?.localCharacterDir || '本地角色目录';
+
+        if (!characters.length) {
+          state.charactersList.innerHTML = `
+            <div>
+              <span>空状态</span>
+              <strong>还没有找到角色卡</strong>
+            </div>
+            <div>
+              <span>下一步</span>
+              <strong>点击“创建模板角色”生成一张本地角色卡</strong>
+            </div>
+          `;
+          return;
+        }
+
+        state.charactersList.innerHTML = characters.slice(0, 20).map((character) => `
+          <div title="${escapeHtml(character.filePath || '')}">
+            <span>${escapeHtml(character.source || 'Local')} · ${escapeHtml(character.type || 'card')}</span>
+            <strong>${escapeHtml(character.name)}</strong>
+            <small>${escapeHtml((character.description || character.subtitle || '无简介').slice(0, 96))}</small>
+          </div>
+        `).join('');
+      }
+
+      async function loadCharacters() {
+        state.charactersCount.textContent = '正在加载';
+        state.charactersSummary.textContent = '正在扫描 PR 本地角色目录与 SillyTavern 角色目录。';
+
+        try {
+          renderCharacters(await fetchJson('/api/characters'));
+        } catch (error) {
+          state.charactersCount.textContent = '加载失败';
+          state.charactersSummary.textContent = error.message;
+        }
+      }
+
+      async function createTemplateCharacter() {
+        const name = window.prompt('输入新角色名', '本地角色模板');
+        if (!name) {
+          return;
+        }
+
+        const result = await postAction('/api/characters/create-template', { name });
+        setFooter(result.ok ? `已创建角色：${result.character.name}` : (result.reason || '创建失败'));
+        await loadCharacters();
+      }
+
+      function renderMemory(payload) {
+        const memory = payload.memory || {};
+        state.memory = memory;
+        state.memoryStatus.textContent = payload.path ? '已加载本地记忆' : '已加载';
+        state.memorySummaryInput.value = memory.plotSummary || '';
+        state.memoryNameDisplay.textContent = memory.userMemory?.preferredName || '未设置';
+        state.memoryRelationshipDisplay.textContent = memory.userMemory?.relationship || '未设置';
+      }
+
+      async function loadMemory() {
+        state.memoryStatus.textContent = '正在加载';
+
+        try {
+          renderMemory(await fetchJson('/api/memory'));
+        } catch (error) {
+          state.memoryStatus.textContent = `加载失败：${error.message}`;
+        }
+      }
+
+      async function saveMemory() {
+        const payload = await postAction('/api/memory', {
+          memory: {
+            plotSummary: state.memorySummaryInput.value,
+          },
+        });
+        renderMemory(payload);
+        setFooter('记忆摘要已保存');
+      }
+
+      function renderSettingsForm() {
+        const section = settingsSections[state.currentSettingsSection] || settingsSections.appearance;
+        const sectionState = state.settings?.[state.currentSettingsSection] || {};
+        state.settingsSectionTitle.textContent = section.title;
+        state.settingsSectionSummary.textContent = section.summary;
+        state.settingsFormTitle.textContent = section.title;
+        state.settingsStatus.textContent = state.settings ? '已加载本地设置' : '正在加载';
+
+        state.settingsForm.innerHTML = section.fields.map((field) => {
+          const value = sectionState[field.key];
+          let control = '';
+          if (field.type === 'select') {
+            control = `
+              <select data-setting-field="${field.key}" data-setting-type="${field.type}">
+                ${field.options.map((option) => `
+                  <option value="${escapeHtml(option)}"${option === value ? ' selected' : ''}>${escapeHtml(option)}</option>
+                `).join('')}
+              </select>
+            `;
+          } else if (field.type === 'checkbox') {
+            control = `<input data-setting-field="${field.key}" data-setting-type="${field.type}" type="checkbox"${value ? ' checked' : ''}>`;
+          } else if (field.type === 'textarea') {
+            control = `<textarea data-setting-field="${field.key}" data-setting-type="${field.type}" rows="5">${escapeHtml(value || '')}</textarea>`;
+          } else {
+            control = `<input data-setting-field="${field.key}" data-setting-type="${field.type}" type="${field.type}" value="${escapeHtml(value ?? '')}">`;
+          }
+
+          return `
+            <div>
+              <span>${escapeHtml(field.label)}</span>
+              ${control}
+            </div>
+          `;
+        }).join('');
+      }
+
+      async function loadSettings() {
+        state.settingsStatus.textContent = '正在加载';
+
+        try {
+          const payload = await fetchJson('/api/settings');
+          state.settings = payload.settings;
+          renderSettingsForm();
+        } catch (error) {
+          state.settingsStatus.textContent = `加载失败：${error.message}`;
+        }
+      }
+
+      async function saveSettings() {
+        const sectionPatch = {};
+        state.settingsForm.querySelectorAll('[data-setting-field]').forEach((field) => {
+          const key = field.dataset.settingField;
+          const type = field.dataset.settingType;
+          if (type === 'checkbox') {
+            sectionPatch[key] = field.checked;
+          } else if (type === 'number') {
+            sectionPatch[key] = Number(field.value);
+          } else {
+            sectionPatch[key] = field.value;
+          }
+        });
+
+        const payload = await postAction('/api/settings', {
+          settings: {
+            [state.currentSettingsSection]: sectionPatch,
+          },
+        });
+        state.settings = payload.settings;
+        renderSettingsForm();
+        setFooter(`${settingsSections[state.currentSettingsSection].title} 已保存`);
+      }
+
+      function selectSettingsSection(section) {
+        state.currentSettingsSection = settingsSections[section] ? section : 'appearance';
+        pushRoute('/settings');
+        renderSettingsForm();
+      }
+
+      function loadRouteData(route) {
+        if (route === '/characters') {
+          loadCharacters();
+        } else if (route === '/memory') {
+          loadMemory();
+        } else if (route === '/settings') {
+          loadSettings();
+        }
+      }
+
       async function refreshUpdateState() {
         const response = await fetch(`${apiBase}/api/update/state`);
         const payload = await response.json();
@@ -353,8 +809,41 @@
         document.body.classList.toggle('right-hidden');
       }
 
-      document.querySelector('#right-toggle').addEventListener('click', toggleRightPanel);
-      document.querySelector('#composer-settings-button').addEventListener('click', toggleRightPanel);
+      function openSettingsRoute() {
+        pushRoute('/settings');
+        document.body.classList.remove('right-hidden');
+        if (window.matchMedia('(max-width: 1120px)').matches) {
+          document.body.classList.add('right-open');
+        }
+      }
+
+      document.querySelector('#right-toggle').addEventListener('click', openSettingsRoute);
+      document.querySelector('#composer-settings-button').addEventListener('click', openSettingsRoute);
+
+      document.querySelector('#refresh-characters-button').addEventListener('click', loadCharacters);
+      document.querySelector('#create-template-character-button').addEventListener('click', createTemplateCharacter);
+      document.querySelector('#side-create-template-character-button').addEventListener('click', createTemplateCharacter);
+      document.querySelector('#open-characters-folder-button').addEventListener('click', () => {
+        postAction('/api/open/characters-folder');
+      });
+      document.querySelector('#side-open-characters-folder-button').addEventListener('click', () => {
+        postAction('/api/open/characters-folder');
+      });
+
+      document.querySelector('#refresh-memory-button').addEventListener('click', loadMemory);
+      document.querySelector('#save-memory-button').addEventListener('click', saveMemory);
+
+      document.querySelector('#refresh-settings-button').addEventListener('click', loadSettings);
+      document.querySelector('#save-settings-button').addEventListener('click', saveSettings);
+      document.querySelector('#open-settings-folder-button').addEventListener('click', () => {
+        postAction('/api/open/settings-folder');
+      });
+
+      document.querySelectorAll('[data-settings-section]').forEach((button) => {
+        button.addEventListener('click', () => {
+          selectSettingsSection(button.dataset.settingsSection);
+        });
+      });
 
       document.addEventListener('click', (event) => {
         if (!event.target.closest('.more-menu')) {
@@ -433,6 +922,7 @@
         renderUpdate(update);
       });
 
+      pushRoute(getRouteFromLocation(), true);
       getStatus();
       refreshUpdateState();
       setInterval(getStatus, 2500);

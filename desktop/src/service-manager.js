@@ -28,6 +28,58 @@ const sillyTavernLog = path.join(logDir, 'sillytavern.log');
 const lmStudioLog = path.join(logDir, 'lmstudio.log');
 const themeMarkers = ['PR Desktop chat app theme', 'PR WeChat-inspired chat theme'];
 const themeFileName = 'sillytavern_wechat_user.css';
+const configDir = path.join(appDataDir, 'config');
+const memoryDir = path.join(appDataDir, 'memory');
+const localCharacterDir = path.join(appDataDir, 'characters');
+const settingsFile = path.join(configDir, 'settings.json');
+const memoryFile = path.join(memoryDir, 'memory.json');
+
+const defaultSettings = {
+  appearance: {
+    theme: 'dark',
+    fontSize: 16,
+    pageWidth: 'comfortable',
+    avatarStyle: 'rounded',
+  },
+  chat: {
+    style: 'wechat',
+    bubbleWidth: 72,
+    messageSpacing: 12,
+    showAvatar: true,
+  },
+  background: {
+    image: '',
+    blur: 18,
+    opacity: 0.62,
+    shadow: true,
+  },
+  advanced: {
+    customCss: '',
+    visualEffects: true,
+    performanceMode: false,
+  },
+};
+
+const defaultMemory = {
+  shortTerm: [],
+  longTerm: [],
+  plotSummary: '',
+  userMemory: {
+    preferredName: '',
+    relationship: '',
+    events: [],
+    promises: [],
+    preferences: [],
+    blockedTopics: [],
+  },
+  options: {
+    enabled: true,
+    maxItems: 50,
+    summarizeEveryTurns: 20,
+    allowManualEdit: true,
+  },
+  updatedAt: null,
+};
 
 let sillyTavernProcess = null;
 let lmStudioServerProcess = null;
@@ -37,6 +89,255 @@ let backendPort = null;
 function ensureRuntimeDirs() {
   fs.mkdirSync(logDir, { recursive: true });
   fs.mkdirSync(CONFIG.modelDir, { recursive: true });
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.mkdirSync(memoryDir, { recursive: true });
+  fs.mkdirSync(localCharacterDir, { recursive: true });
+}
+
+function deepMerge(base, patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return base;
+  }
+
+  const next = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && base[key]
+      && typeof base[key] === 'object'
+      && !Array.isArray(base[key])
+    ) {
+      next[key] = deepMerge(base[key], value);
+    } else {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
+function readJsonFile(filePath, fallback) {
+  ensureRuntimeDirs();
+  if (!fs.existsSync(filePath)) {
+    return fallback;
+  }
+
+  try {
+    return deepMerge(fallback, JSON.parse(fs.readFileSync(filePath, 'utf8')));
+  } catch (error) {
+    return {
+      ...fallback,
+      readError: error.message,
+    };
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  ensureRuntimeDirs();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  return data;
+}
+
+function getLocalSettings() {
+  return readJsonFile(settingsFile, defaultSettings);
+}
+
+function saveLocalSettings(patch = {}) {
+  const settings = deepMerge(getLocalSettings(), patch);
+  settings.updatedAt = new Date().toISOString();
+  writeJsonFile(settingsFile, settings);
+  return settings;
+}
+
+function getMemoryState() {
+  return readJsonFile(memoryFile, defaultMemory);
+}
+
+function saveMemoryState(patch = {}) {
+  const memory = deepMerge(getMemoryState(), patch);
+  memory.updatedAt = new Date().toISOString();
+  writeJsonFile(memoryFile, memory);
+  return memory;
+}
+
+function safeFileName(name) {
+  return String(name || 'character')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'character';
+}
+
+function getTemplatePath(fileName) {
+  const candidates = [
+    path.resolve(__dirname, '..', '..', 'templates', fileName),
+    process.resourcesPath ? path.join(process.resourcesPath, 'templates', fileName) : null,
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function readCharacterTemplate() {
+  const templatePath = getTemplatePath('character_card_v2_template.json');
+  if (!templatePath) {
+    return { path: null, data: null, error: 'Character template was not found.' };
+  }
+
+  try {
+    return {
+      path: templatePath,
+      data: JSON.parse(fs.readFileSync(templatePath, 'utf8')),
+    };
+  } catch (error) {
+    return { path: templatePath, data: null, error: error.message };
+  }
+}
+
+function readWorldInfoTemplate() {
+  const templatePath = getTemplatePath('world_info_entries.jsonl');
+  if (!templatePath) {
+    return { path: null, entries: [], error: 'World info template was not found.' };
+  }
+
+  try {
+    const entries = fs.readFileSync(templatePath, 'utf8')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    return { path: templatePath, entries };
+  } catch (error) {
+    return { path: templatePath, entries: [], error: error.message };
+  }
+}
+
+function summarizeCharacterJson(filePath, source) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const data = raw.data || raw;
+    const name = data.name || path.basename(filePath, path.extname(filePath));
+    return {
+      id: `${source}:${filePath}`,
+      name,
+      subtitle: data.character_version || data.creator_notes || data.scenario || '',
+      description: data.description || '',
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      source,
+      filePath,
+      type: 'json',
+    };
+  } catch (error) {
+    return {
+      id: `${source}:${filePath}`,
+      name: path.basename(filePath, path.extname(filePath)),
+      subtitle: '读取失败',
+      description: error.message,
+      tags: [],
+      source,
+      filePath,
+      type: 'json',
+      error: error.message,
+    };
+  }
+}
+
+function summarizeCharacterFile(filePath, source) {
+  if (/\.json$/i.test(filePath)) {
+    return summarizeCharacterJson(filePath, source);
+  }
+
+  return {
+    id: `${source}:${filePath}`,
+    name: path.basename(filePath, path.extname(filePath)),
+    subtitle: '图片角色卡',
+    description: '图片角色卡会由 SillyTavern 读取，PR Desktop 仅展示文件入口。',
+    tags: [],
+    source,
+    filePath,
+    type: path.extname(filePath).replace('.', '').toLowerCase() || 'file',
+  };
+}
+
+function listCharacterFilesInDir(dir, source) {
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(json|png|webp)$/i.test(entry.name))
+    .map((entry) => summarizeCharacterFile(path.join(dir, entry.name), source));
+}
+
+function getSillyTavernCharacterDirs() {
+  const dataDir = path.join(CONFIG.sillyTavernDir, 'data');
+  if (!fs.existsSync(dataDir)) {
+    return [];
+  }
+
+  return fs.readdirSync(dataDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(dataDir, entry.name, 'characters'))
+    .filter((dir) => fs.existsSync(dir));
+}
+
+function getCharactersState() {
+  ensureRuntimeDirs();
+  const template = readCharacterTemplate();
+  const worldInfo = readWorldInfoTemplate();
+  const localCharacters = listCharacterFilesInDir(localCharacterDir, 'PR Local');
+  const sillyTavernDirs = getSillyTavernCharacterDirs();
+  const sillyTavernCharacters = sillyTavernDirs.flatMap((dir) => (
+    listCharacterFilesInDir(dir, `SillyTavern:${path.basename(path.dirname(dir))}`)
+  ));
+
+  const templateCharacter = template.data ? {
+    id: 'template:character-card-v2',
+    name: template.data.data?.name || '角色卡模板',
+    subtitle: 'PR 结构化角色卡模板',
+    description: template.data.data?.description || '',
+    tags: template.data.data?.tags || [],
+    source: 'Template',
+    filePath: template.path,
+    type: 'template',
+  } : null;
+
+  return {
+    ok: true,
+    characters: [
+      ...(templateCharacter ? [templateCharacter] : []),
+      ...localCharacters,
+      ...sillyTavernCharacters,
+    ],
+    template,
+    worldInfo,
+    paths: {
+      localCharacterDir,
+      sillyTavernDir: CONFIG.sillyTavernDir,
+      sillyTavernCharacterDirs: sillyTavernDirs,
+    },
+  };
+}
+
+function createCharacterFromTemplate(options = {}) {
+  const template = readCharacterTemplate();
+  if (!template.data) {
+    return { ok: false, reason: template.error || 'Character template is not available.' };
+  }
+
+  const name = String(options.name || '本地角色模板').trim() || '本地角色模板';
+  const next = JSON.parse(JSON.stringify(template.data));
+  next.data = next.data || {};
+  next.data.name = name;
+  next.data.character_version = options.characterVersion || '1.0';
+
+  const filePath = path.join(localCharacterDir, `${safeFileName(name)}-${timestamp()}.json`);
+  writeJsonFile(filePath, next);
+  return {
+    ok: true,
+    character: summarizeCharacterJson(filePath, 'PR Local'),
+    filePath,
+  };
 }
 
 function appendLog(file, message) {
@@ -708,6 +1009,48 @@ async function createBackendServer(handlers = {}) {
         return;
       }
 
+      if (url.pathname === '/api/settings') {
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req);
+          sendJson(res, 200, { ok: true, settings: saveLocalSettings(body.settings || body) });
+          return;
+        }
+
+        sendJson(res, 200, {
+          ok: true,
+          settings: getLocalSettings(),
+          path: settingsFile,
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/memory') {
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req);
+          sendJson(res, 200, { ok: true, memory: saveMemoryState(body.memory || body) });
+          return;
+        }
+
+        sendJson(res, 200, {
+          ok: true,
+          memory: getMemoryState(),
+          path: memoryFile,
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/characters') {
+        sendJson(res, 200, getCharactersState());
+        return;
+      }
+
+      if (url.pathname === '/api/characters/create-template') {
+        const body = await readJsonBody(req);
+        const result = createCharacterFromTemplate(body);
+        sendJson(res, result.ok ? 200 : 500, result);
+        return;
+      }
+
       if (url.pathname === '/api/models/local') {
         const lmStudio = await checkLmStudio();
         sendJson(res, 200, {
@@ -737,6 +1080,18 @@ async function createBackendServer(handlers = {}) {
       if (url.pathname === '/api/open/sillytavern-folder') {
         handlers.openPath?.(CONFIG.sillyTavernDir);
         sendJson(res, 200, { ok: true, path: CONFIG.sillyTavernDir });
+        return;
+      }
+
+      if (url.pathname === '/api/open/characters-folder') {
+        handlers.openPath?.(localCharacterDir);
+        sendJson(res, 200, { ok: true, path: localCharacterDir });
+        return;
+      }
+
+      if (url.pathname === '/api/open/settings-folder') {
+        handlers.openPath?.(configDir);
+        sendJson(res, 200, { ok: true, path: configDir });
         return;
       }
 
