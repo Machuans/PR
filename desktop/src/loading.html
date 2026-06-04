@@ -53,7 +53,7 @@
         </section>
 
         <div class="sidebar-footer">
-          <button class="sidebar-action" id="open-st-button" type="button">打开 SillyTavern</button>
+          <button class="sidebar-action" id="open-st-button" type="button">进入 SillyTavern</button>
         </div>
       </aside>
 
@@ -170,7 +170,7 @@
               <p id="update-text">等待检查</p>
             </div>
           </div>
-          <small>GitHub Release 更新源</small>
+          <small>GitHub Release 发布后才会推送</small>
         </section>
 
         <section class="panel-card">
@@ -226,6 +226,7 @@
         loadLocalModelButton: document.querySelector('#load-local-model-button'),
         installUpdateButton: document.querySelector('#install-update-button'),
         preferredLoadModel: null,
+        sillyTavernUrl: 'http://127.0.0.1:8000',
       };
 
       function setDot(dot, ok, pending = false) {
@@ -266,6 +267,7 @@
         setDot(state.stDot, status.sillyTavern.ok);
         state.stText.textContent = status.sillyTavern.ok ? '服务已就绪' : '未启动，正在尝试启动';
         state.stUrl.textContent = status.config.sillyTavernUrl;
+        state.sillyTavernUrl = status.config.sillyTavernUrl;
 
         const deepseek = status.proxy.providers.find((provider) => provider.id === 'deepseek');
         const openai = status.proxy.providers.find((provider) => provider.id === 'openai');
@@ -393,7 +395,7 @@
       });
 
       document.querySelector('#open-st-button').addEventListener('click', () => {
-        postAction('/api/open/sillytavern');
+        window.location.href = state.sillyTavernUrl;
       });
 
       document.querySelector('#update-button').addEventListener('click', async () => {

@@ -13,7 +13,7 @@ const RELEASES_URL = 'https://github.com/Machuans/PR/releases';
 let mainWindow = null;
 let updateState = {
   status: 'idle',
-  message: '等待检查更新',
+  message: '等待检查 GitHub Release 更新',
   currentVersion: app.getVersion(),
   canInstall: false,
 };
@@ -42,7 +42,7 @@ function configureAutoUpdater() {
   autoUpdater.on('checking-for-update', () => {
     setUpdateState({
       status: 'checking',
-      message: '正在检查 GitHub Release 更新',
+      message: '正在检查 GitHub Release 更新源',
       canInstall: false,
     });
   });
@@ -59,7 +59,7 @@ function configureAutoUpdater() {
   autoUpdater.on('update-not-available', (info) => {
     setUpdateState({
       status: 'current',
-      message: `已是最新版本 ${info.version || app.getVersion()}`,
+      message: `已是最新 Release 版本 ${info.version || app.getVersion()}`,
       version: info.version || app.getVersion(),
       canInstall: false,
     });
@@ -211,7 +211,7 @@ async function boot() {
     },
   });
 
-  if (status.sillyTavern.ok) {
+  if (status.sillyTavern.ok && process.env.PR_AUTO_OPEN_SILLYTAVERN === 'true') {
     await mainWindow.loadURL(CONFIG.sillyTavernUrl);
   } else {
     mainWindow?.webContents.send('service-status', status);
@@ -220,7 +220,7 @@ async function boot() {
   if (app.isPackaged) {
     setTimeout(() => {
       checkForUpdates();
-    }, 5000);
+    }, 1500);
   }
 }
 
