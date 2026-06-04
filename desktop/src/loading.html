@@ -395,7 +395,7 @@
       });
 
       document.querySelector('#open-st-button').addEventListener('click', () => {
-        window.location.href = state.sillyTavernUrl;
+        postAction('/api/open/sillytavern');
       });
 
       document.querySelector('#update-button').addEventListener('click', async () => {

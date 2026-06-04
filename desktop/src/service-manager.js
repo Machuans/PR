@@ -741,8 +741,11 @@ async function createBackendServer(handlers = {}) {
       }
 
       if (url.pathname === '/api/open/sillytavern') {
-        handlers.openExternal?.(CONFIG.sillyTavernUrl);
-        sendJson(res, 200, { ok: true, url: CONFIG.sillyTavernUrl });
+        const result = await handlers.openSillyTavernApp?.(CONFIG.sillyTavernUrl);
+        if (!result) {
+          handlers.openExternal?.(CONFIG.sillyTavernUrl);
+        }
+        sendJson(res, 200, result || { ok: true, url: CONFIG.sillyTavernUrl, mode: 'external' });
         return;
       }
 

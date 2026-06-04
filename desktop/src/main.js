@@ -11,6 +11,7 @@ const {
 
 const RELEASES_URL = 'https://github.com/Machuans/PR/releases';
 let mainWindow = null;
+let sillyTavernWindow = null;
 let updateState = {
   status: 'idle',
   message: '等待检查 GitHub Release 更新',
@@ -163,6 +164,81 @@ function installDownloadedUpdate() {
   return { ok: true, state: updateState };
 }
 
+function isLocalSillyTavernUrl(url) {
+  try {
+    const target = new URL(url);
+    const configured = new URL(CONFIG.sillyTavernUrl);
+    return target.origin === configured.origin;
+  } catch {
+    return false;
+  }
+}
+
+function configureHostedSillyTavern(webContents) {
+  webContents.setWindowOpenHandler(({ url }) => {
+    if (isLocalSillyTavernUrl(url)) {
+      return { action: 'allow' };
+    }
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  webContents.on('will-navigate', (event, url) => {
+    if (isLocalSillyTavernUrl(url)) {
+      return;
+    }
+    event.preventDefault();
+    shell.openExternal(url);
+  });
+
+  webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
+    const allowedPermissions = new Set([
+      'clipboard-read',
+      'media',
+      'notifications',
+      'fullscreen',
+      'pointerLock',
+      'display-capture',
+    ]);
+    callback(allowedPermissions.has(permission));
+  });
+}
+
+async function openSillyTavernInApp() {
+  if (sillyTavernWindow && !sillyTavernWindow.isDestroyed()) {
+    if (sillyTavernWindow.isMinimized()) {
+      sillyTavernWindow.restore();
+    }
+    sillyTavernWindow.focus();
+    return { ok: true, url: CONFIG.sillyTavernUrl, reused: true };
+  }
+
+  sillyTavernWindow = new BrowserWindow({
+    width: 1360,
+    height: 900,
+    minWidth: 980,
+    minHeight: 680,
+    title: 'PR SillyTavern',
+    backgroundColor: '#0d1017',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  sillyTavernWindow.removeMenu();
+  configureHostedSillyTavern(sillyTavernWindow.webContents);
+  sillyTavernWindow.once('ready-to-show', () => sillyTavernWindow?.show());
+  sillyTavernWindow.on('closed', () => {
+    sillyTavernWindow = null;
+  });
+
+  await sillyTavernWindow.loadURL(CONFIG.sillyTavernUrl);
+  return { ok: true, url: CONFIG.sillyTavernUrl, reused: false };
+}
+
 async function createMainWindow(backendPort) {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -196,6 +272,7 @@ async function boot() {
     checkForUpdates,
     getUpdateState,
     installDownloadedUpdate,
+    openSillyTavernApp: openSillyTavernInApp,
     openExternal: (url) => shell.openExternal(url),
     openPath: (target) => shell.openPath(target),
     openReleases: () => shell.openExternal(RELEASES_URL),
@@ -211,10 +288,10 @@ async function boot() {
     },
   });
 
+  mainWindow?.webContents.send('service-status', status);
+
   if (status.sillyTavern.ok && process.env.PR_AUTO_OPEN_SILLYTAVERN === 'true') {
-    await mainWindow.loadURL(CONFIG.sillyTavernUrl);
-  } else {
-    mainWindow?.webContents.send('service-status', status);
+    await openSillyTavernInApp();
   }
 
   if (app.isPackaged) {

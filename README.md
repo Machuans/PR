@@ -70,7 +70,7 @@
 - 打开默认模型目录 `E:\AI-Models\PR`。
 - 打包安装后通过 GitHub Release 自动检查更新。
 - 桌面控制台采用中文状态面板，SillyTavern 聊天页可自动套用微信风格左右气泡、浅灰聊天底和紧凑输入栏。
-- PR Desktop 默认停留在控制台；点击“进入 SillyTavern”后才会在应用内打开聊天页。如需启动后自动进入聊天页，可设置 `PR_AUTO_OPEN_SILLYTAVERN=true`。
+- PR Desktop 默认停留在控制台；点击“进入 SillyTavern”后会打开独立的 App 内聊天窗口，不再跳到外部浏览器。外部文档、GitHub、Discord 链接仍会交给系统浏览器打开。如需启动后自动打开聊天窗口，可设置 `PR_AUTO_OPEN_SILLYTAVERN=true`。
 - 自动更新只跟随 GitHub Release 资产；普通 `git push` 到 `main` 不会立即推送桌面更新，需要发布 Release 后客户端才会检测到。
 
 ### SillyTavern 多模型接口
