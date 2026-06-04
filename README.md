@@ -20,11 +20,12 @@
 
 1. 安装并打开 SillyTavern。
 2. 双击 `download-primary-model.cmd` 一键下载本地主力模型到 `E:\AI-Models\PR`。
-3. 安装并打开 LM Studio，加载已下载的 GGUF 模型：
+3. 安装并打开 LM Studio，下载或导入已下载的 GGUF 模型：
    - 首选：`LuffyTheFox/Qwen3.5-9B-Claude-4.6-Opus-Uncensored-Distilled-GGUF`
    - 推荐文件：`Qwen3.5-9B.Q4_K_M.gguf`
 4. 在 LM Studio 开启 Local Server。
    - SillyTavern local/OpenAI-compatible base URL：`http://localhost:1234/v1`
+   - PR Desktop 会通过 LM Studio REST API 检测已下载模型，并可自动加载可用聊天模型。
 5. 在 SillyTavern 导入角色卡，填入本套件的 System Prompt、Author's Note、World Info。
 6. OpenRouter 只作为补强：
    - 中文 RP：`minimax/minimax-m2-her`
@@ -42,6 +43,7 @@
 - `set-openai-key.cmd`：保存 OpenAI API Key 到 Windows 用户环境变量。
 - `download-primary-model.cmd`：双击下载主力 9B Q4 模型，默认目录 `E:\AI-Models\PR`。
 - `download-all-core-models.cmd`：双击下载主力、中文备用、两个 RP 风味模型，不含 27B 进阶模型。
+- `start-heretic-lab.cmd`：参考 `p-e-w/heretic` 的本地模型加工流程，创建 Python 虚拟环境并运行 Heretic CLI。
 - `scripts/download-models.ps1 -ModelSet advanced`：下载 27B 进阶候选，8-12GB 显存可能较慢。
 - `scripts/install-local-app.ps1`：把 `desktop/dist/win-unpacked` 安装到 `E:\AI-Apps\PR-Desktop`，并刷新唯一桌面快捷方式。
 - `scripts/install-desktop-shortcuts.ps1`：清理旧 PR 快捷方式，只创建一个 `PR Desktop` 快捷方式。
@@ -54,9 +56,12 @@
 桌面端源码在 `desktop/`。它内置一个本地后端，负责：
 
 - 检查 `http://127.0.0.1:1234/v1/models` 是否可用。
+- 同时读取 LM Studio REST `http://127.0.0.1:1234/api/v1/models`，区分已下载、已加载、embedding 和聊天模型。
+- 提供本地模型资源接口 `GET /api/models/local`，以及加载动作 `POST /api/models/load`。
 - 检查并启动 `E:\AI-Apps\SillyTavern` 的 SillyTavern 服务。
 - 提供统一多模型接口 `http://127.0.0.1:7821/v1`。
 - 自动为聊天请求注入中文输出规则，让本地模型和云端模型默认使用简体中文回复。
+- 当 LM Studio 已启动但没有已加载聊天模型时，首次聊天请求会自动加载一个可用本地 LLM，再继续转发。
 - 启动时自动检查并安装 SillyTavern 微信风格聊天主题。
 - 直连 DeepSeek API，模型名：`deepseek-v4-flash`、`deepseek-v4-pro`。
 - 直连 OpenAI API，模型名：`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.5-pro`、`gpt-4.1`、`gpt-4o`。
@@ -81,7 +86,44 @@
 - OpenAI 质量优先：`openai-quality` / `gpt-5.5`
 - OpenAI 高质量：`openai-premium` / `gpt-5.5-pro`
 
-代理会按模型名自动分流：`pr-agent` 自动识别 RP、总结、记忆、角色卡、世界书、剧情导演、中文润色等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API，OpenAI 模型走 OpenAI API。LM Studio 当前加载的本地模型会自动加入模型列表，`pr-qwen35-9b` 会优先映射到实际加载的非 embedding 模型。`pr-premium` / `auto-openai` 会在总结和规划类任务上优先使用 OpenAI。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+代理会按模型名自动分流：`pr-agent` 自动识别 RP、总结、记忆、角色卡、世界书、剧情导演、中文润色等场景；本地模型走 LM Studio，DeepSeek 模型走 DeepSeek API，OpenAI 模型走 OpenAI API。LM Studio 当前已加载的本地模型会自动加入模型列表，`pr-qwen35-9b` 会优先映射到实际加载的非 embedding 模型。如果 LM Studio 只检测到已下载模型但没有加载，PR Desktop 可以通过启动页按钮或首次聊天请求调用 `POST /api/models/load` 自动加载。`pr-premium` / `auto-openai` 会在总结和规划类任务上优先使用 OpenAI。`deepseek-chat` 和 `deepseek-reasoner` 也能识别，但官方已给出弃用时间，建议优先使用 `deepseek-v4-flash` / `deepseek-v4-pro`。
+
+### LM Studio 模型接入
+
+PR Desktop 后端按“资源状态 + 动作接口”的方式组织本地模型接入，便于以后扩展到 Supabase 风格的数据表和权限层：
+
+- `GET http://127.0.0.1:7821/api/models/local`：返回 LM Studio 是否在线、已下载模型、已加载聊天模型、推荐加载模型。
+- `POST http://127.0.0.1:7821/api/models/load`：请求体示例 `{"modelId":"google/gemma-4-e4b"}`，由 PR 后端调用 LM Studio REST API 加载模型。
+- 如果要固定优先加载某个模型，可设置 Windows 用户环境变量 `PR_LMSTUDIO_MODEL`，例如 `google/gemma-4-e4b`。
+
+### Heretic 本地模型实验室
+
+`p-e-w/heretic` 是一个 Python/PyTorch CLI，用于对 Hugging Face 模型做本地加工；它不是 OpenAI-compatible 聊天 API，也不是 GGUF 运行器。PR Desktop 只提供独立脚本入口，不直接把 Heretic 嵌进聊天后端。
+
+运行：
+
+```powershell
+.\start-heretic-lab.cmd
+```
+
+或直接指定模型：
+
+```powershell
+.\scripts\start-heretic-lab.ps1 -ModelId "Qwen/Qwen3-4B-Instruct-2507" -OpenFolder
+```
+
+默认工作目录：
+
+```text
+E:\AI-Models\PR\Heretic
+```
+
+流程建议：
+
+1. 用 Heretic 加工 Hugging Face 模型。
+2. 将输出模型转换/量化为 GGUF。
+3. 在 LM Studio 里加载 GGUF。
+4. PR Desktop 的多模型代理会自动从 LM Studio `/v1/models` 检测到新模型。
 
 ### PR Agent 分工
 

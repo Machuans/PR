@@ -903,6 +903,78 @@ function stripReasoningFields(value) {
   return cleaned;
 }
 
+function countCjk(text) {
+  return (String(text || '').match(/[\u3400-\u9fff]/g) || []).length;
+}
+
+function visibleTextRatio(text) {
+  const content = String(text || '');
+  const visibleChars = (content.match(/[A-Za-z\u3400-\u9fff]/g) || []).length;
+  return visibleChars ? countCjk(content) / visibleChars : 0;
+}
+
+function stripThoughtMarkup(text) {
+  return String(text || '')
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/```(?:thinking|thought|analysis|reasoning)[\s\S]*?```/gi, '')
+    .trim();
+}
+
+function extractChineseTail(text) {
+  const cleaned = stripThoughtMarkup(text);
+  if (!cleaned || !countCjk(cleaned)) {
+    return cleaned;
+  }
+
+  const looksLikeReasoning = /^(thinking process|analysis|reasoning|the user wants|we need|i need|let's|okay|first[,:\s])/i
+    .test(cleaned);
+  const hasMetaReasoning = /用户要求我|核心任务|执行步骤|输出结果|检查格式要求|角色\/语气|思考过程|推理过程|直接输出目标文本/
+    .test(cleaned);
+  if (!looksLikeReasoning && !hasMetaReasoning && visibleTextRatio(cleaned) >= 0.18) {
+    return cleaned;
+  }
+
+  const chunks = cleaned
+    .split(/\r?\n|(?<=[.!?。！？])\s*/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const candidates = chunks
+    .filter((chunk) => countCjk(chunk) >= 4 && visibleTextRatio(chunk) >= 0.34)
+    .map((chunk) => {
+      const firstCjk = chunk.search(/[\u3400-\u9fff]/);
+      return firstCjk >= 0 ? chunk.slice(firstCjk).trim() : chunk;
+    });
+
+  return candidates.at(-1) || cleaned;
+}
+
+function cleanAssistantContent(text, providerId) {
+  const cleaned = stripThoughtMarkup(text);
+  if (providerId !== 'local') {
+    return cleaned;
+  }
+
+  return extractChineseTail(cleaned);
+}
+
+function cleanResponseContent(payload, provider) {
+  if (!payload?.choices || !Array.isArray(payload.choices)) {
+    return payload;
+  }
+
+  for (const choice of payload.choices) {
+    if (choice?.message && typeof choice.message.content === 'string') {
+      choice.message.content = cleanAssistantContent(choice.message.content, provider.id);
+    }
+    if (choice?.delta && typeof choice.delta.content === 'string') {
+      choice.delta.content = cleanAssistantContent(choice.delta.content, provider.id);
+    }
+  }
+
+  return payload;
+}
+
 function needsChineseRewrite(text) {
   if (getEnv('PR_AUTO_CHINESE_REWRITE') === 'false') {
     return false;
@@ -946,6 +1018,11 @@ async function rewriteTextToChinese(text, provider, model, headers) {
       },
     ],
   };
+  if (provider.id === 'local') {
+    payload.include_reasoning = false;
+    payload.reasoning_effort = 'none';
+    payload.max_tokens = Math.max(payload.max_tokens, 512);
+  }
   const upstreamBody = prepareProviderPayload(payload, provider);
 
   const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, upstreamBody, headers);
@@ -955,7 +1032,7 @@ async function rewriteTextToChinese(text, provider, model, headers) {
   }
 
   try {
-    const parsed = stripReasoningFields(JSON.parse(body));
+    const parsed = stripReasoningFields(cleanResponseContent(JSON.parse(body), provider));
     return parsed?.choices?.[0]?.message?.content?.trim() || null;
   } catch {
     return null;
@@ -982,7 +1059,55 @@ async function rewriteResponseChoicesToChinese(payload, provider, model, headers
   return payload;
 }
 
-async function sendUpstreamResponse(res, upstream, requestBody, provider, headers) {
+function sendSyntheticStream(res, statusCode, payload) {
+  if (statusCode < 200 || statusCode >= 300) {
+    sendJson(res, statusCode, payload);
+    return;
+  }
+
+  const choice = payload?.choices?.[0] || {};
+  const message = choice.message || {};
+  const content = message.content || '';
+  const id = payload?.id || `chatcmpl-pr-${Date.now()}`;
+  const created = payload?.created || Math.floor(Date.now() / 1000);
+  const model = payload?.model || 'pr-local';
+
+  res.writeHead(200, {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'text/event-stream; charset=utf-8',
+  });
+  res.write(`data: ${JSON.stringify({
+    id,
+    object: 'chat.completion.chunk',
+    created,
+    model,
+    choices: [
+      {
+        index: 0,
+        delta: { role: 'assistant', content },
+        finish_reason: null,
+      },
+    ],
+  })}\n\n`);
+  res.write(`data: ${JSON.stringify({
+    id,
+    object: 'chat.completion.chunk',
+    created,
+    model,
+    choices: [
+      {
+        index: 0,
+        delta: {},
+        finish_reason: choice.finish_reason || 'stop',
+      },
+    ],
+  })}\n\n`);
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+
+async function sendUpstreamResponse(res, upstream, requestBody, provider, headers, options = {}) {
+  const clientWantsStream = options.clientWantsStream ?? requestBody.stream;
   if (requestBody.stream) {
     res.writeHead(upstream.statusCode || 502, {
       'Access-Control-Allow-Origin': '*',
@@ -996,6 +1121,12 @@ async function sendUpstreamResponse(res, upstream, requestBody, provider, header
   const contentType = upstream.headers['content-type'] || 'application/json; charset=utf-8';
 
   if (!contentType.includes('application/json') || getEnv('PR_STRIP_REASONING') === 'false') {
+    if (clientWantsStream) {
+      sendSyntheticStream(res, upstream.statusCode || 502, {
+        choices: [{ message: { content: body }, finish_reason: 'stop' }],
+      });
+      return;
+    }
     res.writeHead(upstream.statusCode || 502, {
       'Access-Control-Allow-Origin': '*',
       'Content-Type': contentType,
@@ -1005,10 +1136,20 @@ async function sendUpstreamResponse(res, upstream, requestBody, provider, header
   }
 
   try {
-    const cleaned = stripReasoningFields(JSON.parse(body));
+    const cleaned = stripReasoningFields(cleanResponseContent(JSON.parse(body), provider));
     const rewritten = await rewriteResponseChoicesToChinese(cleaned, provider, requestBody.model, headers);
+    if (clientWantsStream) {
+      sendSyntheticStream(res, upstream.statusCode || 502, rewritten);
+      return;
+    }
     sendJson(res, upstream.statusCode || 502, rewritten);
   } catch {
+    if (clientWantsStream) {
+      sendSyntheticStream(res, upstream.statusCode || 502, {
+        choices: [{ message: { content: body }, finish_reason: 'stop' }],
+      });
+      return;
+    }
     res.writeHead(upstream.statusCode || 502, {
       'Access-Control-Allow-Origin': '*',
       'Content-Type': contentType,
@@ -1021,6 +1162,7 @@ async function handleChatCompletions(req, res, localModels = []) {
   const requestBody = await readJsonBody(req);
   const route = findRoute(requestBody.model, requestBody.messages, localModels);
   const provider = route.provider;
+  const clientWantsStream = Boolean(requestBody.stream);
 
   if (provider.apiKeyEnv && !getProviderApiKey(provider)) {
     sendJson(res, 401, {
@@ -1041,6 +1183,17 @@ async function handleChatCompletions(req, res, localModels = []) {
 
   if (provider.id === 'local') {
     upstreamBody.include_reasoning = false;
+    upstreamBody.reasoning_effort = 'none';
+    if (upstreamBody.max_tokens !== undefined) {
+      upstreamBody.max_tokens = Math.max(Number(upstreamBody.max_tokens) || 0, 512);
+    } else if (upstreamBody.max_completion_tokens !== undefined) {
+      upstreamBody.max_completion_tokens = Math.max(Number(upstreamBody.max_completion_tokens) || 0, 512);
+    } else {
+      upstreamBody.max_tokens = 1024;
+    }
+    if (clientWantsStream && getEnv('PR_LOCAL_STREAM_BRIDGE') !== 'false') {
+      upstreamBody.stream = false;
+    }
   }
 
   const headers = {};
@@ -1052,7 +1205,7 @@ async function handleChatCompletions(req, res, localModels = []) {
 
   const preparedBody = prepareProviderPayload(upstreamBody, provider);
   const upstream = await forwardJsonRequest(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, preparedBody, headers);
-  await sendUpstreamResponse(res, upstream, preparedBody, provider, headers);
+  await sendUpstreamResponse(res, upstream, preparedBody, provider, headers, { clientWantsStream });
 }
 
 function canHandleModelProxy(req, res, url, localModels = []) {

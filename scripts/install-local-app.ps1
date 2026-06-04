@@ -1,6 +1,7 @@
 param(
   [string]$AppInstallDir = "E:\AI-Apps\PR-Desktop",
-  [switch]$SkipShortcut
+  [switch]$SkipShortcut,
+  [switch]$NoStopProcess
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,27 @@ $SourceExe = Join-Path $SourceDir "PR Desktop.exe"
 
 if (-not (Test-Path $SourceExe)) {
   throw "Packaged app not found: $SourceExe. Run scripts\build-desktop.ps1 first."
+}
+
+$resolvedInstallDir = $null
+if (Test-Path $AppInstallDir) {
+  $resolvedInstallDir = (Resolve-Path $AppInstallDir).Path
+}
+
+if (-not $NoStopProcess) {
+  $running = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessName -like "PR Desktop*" -or (
+      $resolvedInstallDir -and
+      $_.Path -and
+      $_.Path.StartsWith($resolvedInstallDir, [StringComparison]::OrdinalIgnoreCase)
+    )
+  }
+
+  if ($running) {
+    Write-Host "Stopping running PR Desktop before install..."
+    $running | Stop-Process -Force
+    Start-Sleep -Milliseconds 700
+  }
 }
 
 $parent = Split-Path $AppInstallDir -Parent

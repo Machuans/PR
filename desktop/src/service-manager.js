@@ -1,6 +1,7 @@
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
 const {
@@ -14,6 +15,8 @@ const CONFIG = {
   modelDir: process.env.PR_MODEL_DIR || 'E:\\AI-Models\\PR',
   sillyTavernUrl: process.env.PR_SILLYTAVERN_URL || 'http://127.0.0.1:8000',
   lmStudioBaseUrl: process.env.PR_LMSTUDIO_URL || 'http://127.0.0.1:1234/v1',
+  lmStudioRestBaseUrl: process.env.PR_LMSTUDIO_REST_URL || '',
+  preferredLmStudioModel: process.env.PR_LMSTUDIO_MODEL || '',
   preferredModelId: process.env.PR_MODEL_ID || 'pr-qwen35-9b',
   defaultProxyModelId: process.env.PR_PROXY_MODEL_ID || 'pr-agent',
   backendStartPort: Number(process.env.PR_BACKEND_PORT || 7821),
@@ -153,6 +156,147 @@ function requestText(url, timeoutMs = 2500) {
   });
 }
 
+function requestJson(url, options = {}, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+    const body = options.body === undefined ? null : JSON.stringify(options.body);
+    const req = client.request(
+      {
+        method: options.method || (body ? 'POST' : 'GET'),
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || undefined,
+        path: `${parsedUrl.pathname}${parsedUrl.search}`,
+        headers: {
+          ...(body ? {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body),
+          } : {}),
+          ...(options.headers || {}),
+        },
+      },
+      (res) => {
+        let responseBody = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        res.on('end', () => {
+          let data = null;
+          if (responseBody.trim()) {
+            try {
+              data = JSON.parse(responseBody);
+            } catch (error) {
+              reject(new Error(`Invalid JSON from ${url}: ${error.message}`));
+              return;
+            }
+          }
+          resolve({
+            statusCode: res.statusCode || 0,
+            headers: res.headers,
+            body: responseBody,
+            data,
+          });
+        });
+      },
+    );
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Timeout after ${timeoutMs}ms`));
+    });
+
+    req.on('error', reject);
+    if (body) {
+      req.write(body);
+    }
+    req.end();
+  });
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      if (!body.trim()) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(new Error(`Invalid JSON body: ${error.message}`));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function getLmStudioRestBaseUrl() {
+  if (CONFIG.lmStudioRestBaseUrl) {
+    return CONFIG.lmStudioRestBaseUrl.replace(/\/$/, '');
+  }
+
+  return CONFIG.lmStudioBaseUrl
+    .replace(/\/+$/, '')
+    .replace(/\/v1$/i, '')
+    .concat('/api/v1');
+}
+
+function isLmStudioChatModel(model) {
+  return model?.type === 'llm' && typeof model.key === 'string' && model.key.trim();
+}
+
+function hasLoadedInstances(model) {
+  return Array.isArray(model?.loaded_instances) && model.loaded_instances.length > 0;
+}
+
+function toLmStudioModelSummary(model) {
+  return {
+    id: model.key,
+    key: model.key,
+    label: model.display_name || model.key,
+    type: model.type || null,
+    publisher: model.publisher || null,
+    architecture: model.architecture || null,
+    params: model.params_string || null,
+    quantization: model.quantization?.name || null,
+    sizeBytes: model.size_bytes || null,
+    format: model.format || null,
+    maxContextLength: model.max_context_length || null,
+    selectedVariant: model.selected_variant || null,
+    variants: Array.isArray(model.variants) ? model.variants : [],
+    loaded: hasLoadedInstances(model),
+    loadedInstances: Array.isArray(model.loaded_instances) ? model.loaded_instances : [],
+    capabilities: model.capabilities || {},
+  };
+}
+
+function choosePreferredLmStudioModel(models = []) {
+  const chatModels = models.filter(isLmStudioChatModel);
+  if (!chatModels.length) {
+    return null;
+  }
+
+  const preferred = CONFIG.preferredLmStudioModel.trim();
+  if (preferred) {
+    const matched = chatModels.find((model) => (
+      model.key === preferred
+      || model.selected_variant === preferred
+      || (Array.isArray(model.variants) && model.variants.includes(preferred))
+    ));
+    if (matched) {
+      return matched;
+    }
+  }
+
+  return chatModels.find(hasLoadedInstances) || chatModels[0];
+}
+
 async function checkSillyTavern() {
   try {
     const response = await requestText(`${CONFIG.sillyTavernUrl}/`, 2500);
@@ -166,24 +310,142 @@ async function checkSillyTavern() {
 }
 
 async function checkLmStudio() {
+  let openAiStatusCode = 0;
+  let nativeStatusCode = 0;
+  let openAiError = null;
+  let nativeError = null;
+  let openAiModels = [];
+  let nativeModels = [];
+
   try {
     const response = await requestText(`${CONFIG.lmStudioBaseUrl}/models`, 2500);
+    openAiStatusCode = response.statusCode;
     const parsed = JSON.parse(response.body);
-    const models = Array.isArray(parsed.data) ? parsed.data.map((item) => item.id) : [];
-    return {
-      ok: response.statusCode >= 200 && response.statusCode < 300,
-      statusCode: response.statusCode,
-      models,
-      preferredModelLoaded: models.includes(CONFIG.preferredModelId),
-    };
+    openAiModels = Array.isArray(parsed.data) ? parsed.data.map((item) => item.id).filter(Boolean) : [];
   } catch (error) {
+    openAiError = error.message;
+  }
+
+  try {
+    const response = await requestJson(`${getLmStudioRestBaseUrl()}/models`, {}, 3500);
+    nativeStatusCode = response.statusCode;
+    nativeModels = Array.isArray(response.data?.models) ? response.data.models : [];
+  } catch (error) {
+    nativeError = error.message;
+  }
+
+  const availableModels = nativeModels.map(toLmStudioModelSummary);
+  const availableChatModels = availableModels.filter((model) => model.type === 'llm');
+  const loadedChatModels = availableChatModels.filter((model) => model.loaded);
+  const usableOpenAiModels = openAiModels.filter((model) => !/embed|embedding|rerank/i.test(model));
+  const proxyModels = loadedChatModels.length
+    ? loadedChatModels.map((model) => model.id)
+    : nativeModels.length
+      ? []
+      : usableOpenAiModels;
+  const recommendedModel = choosePreferredLmStudioModel(nativeModels);
+  const recommendedLoadModel = recommendedModel ? toLmStudioModelSummary(recommendedModel) : null;
+  const ok = (
+    (openAiStatusCode >= 200 && openAiStatusCode < 300)
+    || (nativeStatusCode >= 200 && nativeStatusCode < 300)
+  );
+
+  return {
+    ok,
+    statusCode: openAiStatusCode || nativeStatusCode,
+    openAiStatusCode,
+    nativeStatusCode,
+    restBaseUrl: getLmStudioRestBaseUrl(),
+    models: proxyModels,
+    openAiModels,
+    availableModels,
+    availableChatModels,
+    loadedChatModels,
+    recommendedLoadModel,
+    preferredModelLoaded: proxyModels.includes(CONFIG.preferredModelId),
+    activeModel: loadedChatModels[0]?.id || usableOpenAiModels[0] || recommendedLoadModel?.id || null,
+    error: openAiError || nativeError || null,
+    openAiError,
+    nativeError,
+  };
+}
+
+async function loadLmStudioModel(options = {}) {
+  const before = await checkLmStudio();
+  const requestedModel = String(
+    options.modelId
+      || options.model
+      || options.id
+      || before.recommendedLoadModel?.id
+      || '',
+  ).trim();
+
+  if (!requestedModel) {
     return {
       ok: false,
-      error: error.message,
-      models: [],
-      preferredModelLoaded: false,
+      reason: 'No local chat model was found in LM Studio.',
+      before,
     };
   }
+
+  const knownModel = before.availableChatModels.find((model) => (
+    model.id === requestedModel
+    || model.selectedVariant === requestedModel
+    || model.variants?.includes(requestedModel)
+  ));
+  if (knownModel?.loaded) {
+    return {
+      ok: true,
+      statusCode: 200,
+      requestedModel,
+      loadedModel: knownModel.id,
+      result: { status: 'already_loaded', model: knownModel.id },
+      before,
+      after: before,
+    };
+  }
+
+  const modelToLoad = options.variant || knownModel?.selectedVariant || requestedModel;
+  const loadBody = { model: modelToLoad };
+
+  const contextLength = Number(options.contextLength || options.context_length || 0);
+  if (contextLength > 0) {
+    loadBody.context_length = contextLength;
+  }
+  if (options.flash_attention !== undefined) {
+    loadBody.flash_attention = Boolean(options.flash_attention);
+  }
+  if (options.ttl !== undefined) {
+    loadBody.ttl = options.ttl;
+  }
+
+  const response = await requestJson(
+    `${getLmStudioRestBaseUrl()}/models/load`,
+    { method: 'POST', body: loadBody },
+    Number(options.timeoutMs || 120000),
+  );
+  const after = await checkLmStudio();
+  const ok = response.statusCode >= 200 && response.statusCode < 300;
+
+  return {
+    ok,
+    statusCode: response.statusCode,
+    requestedModel,
+    loadedModel: modelToLoad,
+    result: response.data,
+    before,
+    after,
+  };
+}
+
+async function ensureLmStudioModelLoaded() {
+  const before = await checkLmStudio();
+  if (before.loadedChatModels?.length || !before.availableChatModels?.length) {
+    return before;
+  }
+
+  const result = await loadLmStudioModel({ modelId: before.recommendedLoadModel?.id });
+  return result.after || checkLmStudio();
 }
 
 function findLmStudioExe() {
@@ -424,7 +686,10 @@ async function createBackendServer(handlers = {}) {
 
     try {
       if (url.pathname.startsWith('/v1/')) {
-        const lmStudio = await checkLmStudio();
+        let lmStudio = await checkLmStudio();
+        if (req.method === 'POST' && url.pathname === '/v1/chat/completions' && !lmStudio.models?.length) {
+          lmStudio = await ensureLmStudioModelLoaded();
+        }
         const localModels = Array.isArray(lmStudio.models) ? lmStudio.models : [];
         if (canHandleModelProxy(req, res, url, localModels)) {
           return;
@@ -440,6 +705,26 @@ async function createBackendServer(handlers = {}) {
 
       if (url.pathname === '/api/start') {
         sendJson(res, 200, await startServices());
+        return;
+      }
+
+      if (url.pathname === '/api/models/local') {
+        const lmStudio = await checkLmStudio();
+        sendJson(res, 200, {
+          ok: lmStudio.ok,
+          lmStudio,
+          models: lmStudio.availableModels,
+          chatModels: lmStudio.availableChatModels,
+          loadedChatModels: lmStudio.loadedChatModels,
+          recommendedLoadModel: lmStudio.recommendedLoadModel,
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/models/load') {
+        const body = await readJsonBody(req);
+        const result = await loadLmStudioModel(body);
+        sendJson(res, result.ok ? 200 : 502, result);
         return;
       }
 
@@ -467,6 +752,24 @@ async function createBackendServer(handlers = {}) {
         return;
       }
 
+      if (url.pathname === '/api/update/state') {
+        const state = handlers.getUpdateState?.();
+        sendJson(res, 200, { ok: true, state: state || null });
+        return;
+      }
+
+      if (url.pathname === '/api/update/install') {
+        const result = handlers.installDownloadedUpdate?.();
+        sendJson(res, 200, result || { ok: false, reason: 'Install handler is not available.' });
+        return;
+      }
+
+      if (url.pathname === '/api/update/releases') {
+        await handlers.openReleases?.();
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
       sendJson(res, 404, { ok: false, reason: 'Not found' });
     } catch (error) {
       sendJson(res, 500, { ok: false, error: error.message });
@@ -487,9 +790,11 @@ function stopSpawnedServices() {
 
 module.exports = {
   CONFIG,
+  checkLmStudio,
   ensureSillyTavernTheme,
   createBackendServer,
   getStatus,
+  loadLmStudioModel,
   startServices,
   stopSpawnedServices,
   waitForSillyTavern,

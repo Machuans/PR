@@ -11,6 +11,7 @@ $DeepSeekKeyScript = Join-Path $PSScriptRoot "set-deepseek-key.ps1"
 $OpenAIKeyScript = Join-Path $PSScriptRoot "set-openai-key.ps1"
 $ConfigureProxyScript = Join-Path $PSScriptRoot "configure-sillytavern-chinese-proxy.ps1"
 $ModelProxyScript = Join-Path $PSScriptRoot "start-model-proxy.ps1"
+$HereticLabScript = Join-Path $PSScriptRoot "start-heretic-lab.ps1"
 $SillyTavernDir = $env:PR_SILLYTAVERN_DIR
 if (-not $SillyTavernDir) {
   $SillyTavernDir = "E:\AI-Apps\SillyTavern"
@@ -142,6 +143,16 @@ function Start-ModelProxy {
   )
 }
 
+function Start-HereticLab {
+  Start-Process powershell.exe -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", "`"$HereticLabScript`"",
+    "-OpenFolder"
+  )
+}
+
 while ($true) {
   Clear-Host
   Write-Host "PR Desktop Launcher"
@@ -161,7 +172,8 @@ while ($true) {
   Write-Host "11. Set OpenAI API key"
   Write-Host "12. Configure SillyTavern Chinese proxy"
   Write-Host "13. Start model proxy"
-  Write-Host "14. Exit"
+  Write-Host "14. Heretic model lab"
+  Write-Host "15. Exit"
   Write-Host ""
 
   $choice = Read-Host "Choose"
@@ -182,7 +194,8 @@ while ($true) {
     "11" { Set-OpenAIKey }
     "12" { Configure-SillyTavernChineseProxy }
     "13" { Start-ModelProxy }
-    "14" { break }
+    "14" { Start-HereticLab }
+    "15" { break }
     default {
       Write-Host "Unknown choice."
       Start-Sleep -Seconds 1

@@ -100,10 +100,13 @@
 
       <section class="actions" aria-label="常用操作">
         <button id="start-button" type="button">启动/重试服务</button>
+        <button id="load-local-model-button" type="button" disabled>加载本地模型</button>
         <button id="open-models-button" type="button">打开模型目录</button>
         <button id="copy-proxy-button" type="button">复制多模型接口</button>
         <button id="open-st-button" type="button">浏览器打开 SillyTavern</button>
         <button id="update-button" type="button">检查更新</button>
+        <button id="install-update-button" type="button" disabled>安装更新</button>
+        <button id="open-releases-button" type="button">发布页</button>
       </section>
 
       <p class="footer" id="footer">后端连接中</p>
@@ -133,6 +136,9 @@
         modeLocal: document.querySelector('#mode-local'),
         modeCloud: document.querySelector('#mode-cloud'),
         modeTheme: document.querySelector('#mode-theme'),
+        loadLocalModelButton: document.querySelector('#load-local-model-button'),
+        installUpdateButton: document.querySelector('#install-update-button'),
+        preferredLoadModel: null,
       };
 
       function setDot(dot, ok, pending = false) {
@@ -141,10 +147,34 @@
 
       function renderStatus(status) {
         setDot(state.lmDot, status.lmStudio.ok);
-        state.lmText.textContent = status.lmStudio.ok ? '接口已连接' : '未连接，正在尝试启动';
-        state.lmModel.textContent = status.lmStudio.preferredModelLoaded
-          ? `模型已加载：${status.config.preferredModelId}`
-          : `模型：${status.lmStudio.models?.join(', ') || '未检测到'}`;
+        const loadedChatModels = status.lmStudio.loadedChatModels || [];
+        const availableChatModels = status.lmStudio.availableChatModels || [];
+        const loadedLocalModels = loadedChatModels.map((model) => model.id)
+          .concat((status.lmStudio.models || []).filter((model) => !model.toLowerCase().includes('embedding')));
+        const uniqueLoadedLocalModels = [...new Set(loadedLocalModels)];
+        const recommended = status.lmStudio.recommendedLoadModel || availableChatModels[0] || null;
+        state.preferredLoadModel = recommended?.id || null;
+
+        if (!status.lmStudio.ok) {
+          state.lmText.textContent = '未连接，正在尝试启动';
+          state.lmModel.textContent = status.lmStudio.error || '等待 LM Studio Local Server';
+        } else if (uniqueLoadedLocalModels.length) {
+          state.lmText.textContent = '本地模型已挂载，可用于聊天';
+          state.lmModel.textContent = `已加载：${uniqueLoadedLocalModels.join(', ')}`;
+        } else if (availableChatModels.length) {
+          state.lmText.textContent = '已检测到下载模型，等待加载';
+          state.lmModel.textContent = `可加载：${availableChatModels.map((model) => model.label || model.id).join(', ')}`;
+        } else {
+          state.lmText.textContent = '接口已连接，但未发现聊天模型';
+          state.lmModel.textContent = `OpenAI 兼容列表：${status.lmStudio.openAiModels?.join(', ') || '空'}`;
+        }
+
+        state.loadLocalModelButton.disabled = !status.lmStudio.ok || !state.preferredLoadModel || uniqueLoadedLocalModels.includes(state.preferredLoadModel);
+        state.loadLocalModelButton.textContent = uniqueLoadedLocalModels.includes(state.preferredLoadModel)
+          ? '本地模型已加载'
+          : recommended
+            ? `加载 ${recommended.label || recommended.id}`
+            : '加载本地模型';
 
         setDot(state.stDot, status.sillyTavern.ok);
         state.stText.textContent = status.sillyTavern.ok ? '服务已就绪' : '未启动，正在尝试启动';
@@ -152,8 +182,6 @@
 
         const deepseek = status.proxy.providers.find((provider) => provider.id === 'deepseek');
         const openai = status.proxy.providers.find((provider) => provider.id === 'openai');
-        const loadedLocalModels = (status.lmStudio.models || [])
-          .filter((model) => !model.toLowerCase().includes('embedding'));
         const cloudNames = [
           deepseek?.configured ? 'DeepSeek' : null,
           openai?.configured ? 'OpenAI' : null,
@@ -164,7 +192,9 @@
           : `PR Agent 已启用：${status.proxy.smart.defaultModel}，云端未配置时自动回退本地`;
         state.proxyUrl.textContent = status.proxy.baseUrl || `http://127.0.0.1:${backendPort}/v1`;
         state.modeAgent.textContent = status.proxy.smart.defaultModel || 'pr-agent';
-        state.modeLocal.textContent = status.lmStudio.ok ? (loadedLocalModels[0] || '已连接 LM Studio') : '等待 LM Studio';
+        state.modeLocal.textContent = status.lmStudio.ok
+          ? (uniqueLoadedLocalModels[0] || recommended?.id || '已连接 LM Studio')
+          : '等待 LM Studio';
         state.modeCloud.textContent = cloudNames.length ? cloudNames.join(' / ') : '自动回退本地';
         state.modeTheme.textContent = status.sillyTavernTheme?.installed ? '微信风格已安装' : '等待安装主题';
 
@@ -174,19 +204,41 @@
         state.headerText.textContent = allReady ? '全部就绪' : '正在准备';
       }
 
+      function renderUpdate(update) {
+        if (!update) {
+          return;
+        }
+        const pending = update.status === 'checking' || update.status === 'downloading' || update.status === 'installing';
+        const ok = ['current', 'available', 'ready', 'downloading', 'checking', 'installing'].includes(update.status);
+        setDot(state.updateDot, ok, pending);
+        const suffix = update.percent !== undefined ? ` (${update.percent}%)` : '';
+        state.updateText.textContent = `${update.message || '等待检查'}${suffix}`;
+        state.installUpdateButton.disabled = !update.canInstall;
+      }
+
       async function getStatus() {
         const response = await fetch(`${apiBase}/api/status`);
         const status = await response.json();
         renderStatus(status);
       }
 
-      async function postAction(path) {
-        const response = await fetch(`${apiBase}${path}`, { method: 'POST' });
+      async function postAction(path, body) {
+        const response = await fetch(`${apiBase}${path}`, {
+          method: 'POST',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        });
         const payload = await response.json();
         if (payload.status) {
           renderStatus(payload.status);
         }
         return payload;
+      }
+
+      async function refreshUpdateState() {
+        const response = await fetch(`${apiBase}/api/update/state`);
+        const payload = await response.json();
+        renderUpdate(payload.state);
       }
 
       document.querySelector('#start-button').addEventListener('click', async () => {
@@ -197,6 +249,20 @@
 
       document.querySelector('#open-models-button').addEventListener('click', () => {
         postAction('/api/open/model-folder');
+      });
+
+      document.querySelector('#load-local-model-button').addEventListener('click', async () => {
+        if (!state.preferredLoadModel) {
+          return;
+        }
+        state.footer.textContent = `正在加载本地模型：${state.preferredLoadModel}`;
+        state.loadLocalModelButton.disabled = true;
+        state.loadLocalModelButton.textContent = '正在加载模型';
+        const result = await postAction('/api/models/load', { modelId: state.preferredLoadModel });
+        if (!result.ok) {
+          state.footer.textContent = result.reason || result.error || '模型加载失败';
+        }
+        await getStatus();
       });
 
       document.querySelector('#copy-proxy-button').addEventListener('click', async () => {
@@ -214,21 +280,36 @@
         const result = await postAction('/api/update/check');
         if (result.ok) {
           setDot(state.updateDot, true);
-          state.updateText.textContent = '更新检查已启动';
+          renderUpdate(result.state);
         } else {
           setDot(state.updateDot, false);
           state.updateText.textContent = result.reason || result.error || '当前环境不能自动更新';
         }
       });
 
+      document.querySelector('#install-update-button').addEventListener('click', async () => {
+        setDot(state.updateDot, false, true);
+        state.updateText.textContent = '正在准备安装更新';
+        const result = await postAction('/api/update/install');
+        if (!result.ok) {
+          setDot(state.updateDot, false);
+          state.updateText.textContent = result.reason || '没有可安装的更新';
+        }
+      });
+
+      document.querySelector('#open-releases-button').addEventListener('click', () => {
+        postAction('/api/update/releases');
+      });
+
       window.prDesktop?.onServiceStatus(renderStatus);
       window.prDesktop?.onUpdateState((update) => {
-        setDot(state.updateDot, update.status !== 'error', update.status === 'checking' || update.status === 'downloading');
-        state.updateText.textContent = update.message;
+        renderUpdate(update);
       });
 
       getStatus();
+      refreshUpdateState();
       setInterval(getStatus, 2500);
+      setInterval(refreshUpdateState, 8000);
     </script>
   </body>
 </html>
