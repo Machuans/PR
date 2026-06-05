@@ -229,6 +229,13 @@ function configureHostedSillyTavern(webContents) {
   });
 }
 
+function keepMainWindowTitle() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.setTitle('PR Desktop');
+}
+
 async function openSillyTavernInApp(options = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return { ok: false, reason: 'Main window is not ready.', url: CONFIG.sillyTavernUrl, mode: 'main-window' };
@@ -274,6 +281,12 @@ async function createMainWindow(backendPort) {
 
   mainWindow.removeMenu();
   configureHostedSillyTavern(mainWindow.webContents);
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+    keepMainWindowTitle();
+  });
+  mainWindow.webContents.on('did-navigate', keepMainWindowTitle);
+  mainWindow.webContents.on('did-finish-load', keepMainWindowTitle);
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => {
     mainWindow = null;

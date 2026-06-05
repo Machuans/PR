@@ -35,7 +35,7 @@
     --pr-space-3: 12px;
     --pr-space-4: 16px;
     --pr-space-5: 20px;
-    --pr-thread-width: 980px;
+    --pr-thread-width: 1200px;
 }
 
 html,
@@ -79,7 +79,7 @@ body {
     position: sticky !important;
     top: 0;
     z-index: 80;
-    min-height: 58px;
+    min-height: 48px;
     border-bottom: 1px solid var(--pr-chat-border) !important;
     background: rgba(13, 16, 23, 0.92) !important;
     box-shadow: 0 10px 34px rgba(0, 0, 0, 0.34);
@@ -88,7 +88,9 @@ body {
 }
 
 #top-settings-holder {
-    gap: 4px;
+    gap: 2px;
+    min-height: 48px !important;
+    padding-inline: 8px !important;
     color: var(--pr-text) !important;
     text-shadow: none !important;
 }
@@ -102,22 +104,42 @@ body {
 }
 
 #top-settings-holder .drawer-toggle {
-    width: 38px;
-    min-width: 38px;
-    height: 34px;
+    width: 34px;
+    min-width: 34px;
+    height: 32px;
     border-radius: var(--pr-radius) !important;
+    opacity: 0.38;
+    transform: scale(0.92);
+    transition: opacity 0.14s ease, transform 0.14s ease, background-color 0.14s ease;
 }
 
 .drawer-icon,
 #top-settings-holder .drawer-icon {
     color: rgba(245, 240, 255, 0.68) !important;
     border-radius: var(--pr-radius) !important;
+    font-size: 18px !important;
     text-shadow: none !important;
+}
+
+#sys-settings-button .drawer-toggle,
+#user-settings-button .drawer-toggle,
+#persona-management-button .drawer-toggle {
+    opacity: 0.72;
+}
+
+#ai-config-button .drawer-toggle,
+#advanced-formatting-button .drawer-toggle,
+#WI-SP-button .drawer-toggle,
+#backgrounds-button .drawer-toggle,
+#extensions-settings-button .drawer-toggle {
+    opacity: 0.26;
 }
 
 #top-settings-holder .drawer-toggle:hover,
 #top-settings-holder .drawer-toggle.openDrawer {
     background: var(--pr-primary-soft) !important;
+    opacity: 1;
+    transform: scale(1);
 }
 
 #top-settings-holder .drawer-toggle:hover .drawer-icon,
@@ -169,7 +191,7 @@ body {
     max-width: min(var(--pr-thread-width), calc(100vw - 34px));
     min-height: 0;
     margin-inline: auto;
-    padding: 24px clamp(14px, 2.2vw, 28px) 132px;
+    padding: 18px clamp(18px, 3vw, 36px) 112px;
     gap: var(--pr-space-2);
     color: var(--pr-text) !important;
     background: var(--pr-chat-backdrop) !important;
@@ -182,9 +204,9 @@ body {
 
 #chat .welcomePanel {
     width: 100%;
-    margin: 0 auto var(--pr-space-4);
-    padding: var(--pr-space-4) !important;
-    gap: var(--pr-space-3);
+    margin: 0 auto var(--pr-space-3);
+    padding: 12px !important;
+    gap: 10px;
     color: var(--pr-text) !important;
     border: 1px solid var(--pr-chat-border);
     border-radius: var(--pr-radius) !important;
@@ -197,18 +219,18 @@ body {
     display: flex;
     align-items: center;
     min-width: 0;
-    min-height: 36px;
-    gap: var(--pr-space-3);
+    min-height: 30px;
+    gap: 10px;
     color: var(--pr-text) !important;
-    font-size: 18px !important;
+    font-size: 16px !important;
     font-weight: 800;
     line-height: 1.35;
     text-shadow: none !important;
 }
 
 #chat .welcomeHeaderLogo {
-    width: 34px !important;
-    height: 34px !important;
+    width: 28px !important;
+    height: 28px !important;
     border-radius: var(--pr-radius) !important;
     box-shadow: var(--pr-shadow-sm);
 }
@@ -217,8 +239,17 @@ body {
     min-width: 0;
     overflow: hidden;
     color: var(--pr-text) !important;
+    font-size: 0 !important;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+#chat .welcomeHeaderVersionDisplay::before {
+    content: "PR Desktop Chat";
+    color: var(--pr-text);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.25;
 }
 
 #chat .welcomeHeader,
@@ -231,8 +262,8 @@ body {
     display: flex;
     align-items: center;
     gap: var(--pr-space-3);
-    min-height: 38px;
-    padding-top: var(--pr-space-3);
+    min-height: 30px;
+    padding-top: 8px;
     border-top: 1px solid rgba(235, 222, 255, 0.09);
 }
 
@@ -243,7 +274,7 @@ body {
 }
 
 #chat .welcomeShortcuts {
-    display: flex;
+    display: none !important;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--pr-space-2);
@@ -281,8 +312,8 @@ body {
 }
 
 #chat .welcomeRecent .recentChat {
-    min-height: 68px;
-    padding: 10px 12px !important;
+    min-height: 58px;
+    padding: 8px 10px !important;
     color: var(--pr-text) !important;
     border: 1px solid rgba(235, 222, 255, 0.10) !important;
     border-radius: var(--pr-radius) !important;
@@ -302,6 +333,22 @@ body {
     font-size: 14px !important;
     font-weight: 750;
     line-height: 1.35;
+}
+
+#chat .welcomePanel .chatActions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.14s ease;
+}
+
+#chat .welcomePanel .recentChat:hover .chatActions,
+#chat .welcomePanel .recentChat:focus-within .chatActions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#chat .welcomePanel .chatStats {
+    opacity: 0.52;
 }
 
 #chat .welcomePanel .chatMessage,
@@ -525,7 +572,7 @@ body {
     position: sticky !important;
     bottom: 0;
     z-index: 80;
-    padding: 10px 12px 12px;
+    padding: 8px 12px 10px;
     border-top: 1px solid var(--pr-chat-border) !important;
     box-shadow: var(--pr-shadow-top);
 }
@@ -536,10 +583,10 @@ body {
     flex-wrap: nowrap;
     width: 100%;
     max-width: min(var(--pr-thread-width), calc(100vw - 32px));
-    min-height: 58px;
+    min-height: 54px;
     margin-inline: auto;
     gap: var(--pr-space-2);
-    padding: 6px;
+    padding: 5px;
     color: var(--pr-text) !important;
     border: 1px solid var(--pr-chat-border-strong) !important;
     border-radius: var(--pr-radius) !important;
@@ -565,6 +612,22 @@ body {
     flex: 0 0 auto;
     gap: var(--pr-space-1);
     flex-wrap: nowrap !important;
+}
+
+#stscript_continue,
+#stscript_pause,
+#stscript_stop {
+    display: none !important;
+}
+
+#send_form:not(:hover):not(:focus-within) #mes_continue,
+#send_form:not(:hover):not(:focus-within) #mes_impersonate {
+    width: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
 }
 
 body #send_form,
@@ -595,7 +658,7 @@ select {
 
 #send_textarea {
     flex: 1 1 auto;
-    min-height: 44px !important;
+    min-height: 42px !important;
     height: auto !important;
     max-height: 176px;
     padding: 10px 12px !important;
@@ -645,9 +708,9 @@ input[type="submit"] {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    width: 42px;
-    min-width: 42px;
-    height: 42px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
     color: var(--pr-muted) !important;
 }
 
@@ -751,8 +814,8 @@ button:disabled,
 
 @media (min-width: 1040px) {
     #chat {
-        padding-top: 26px;
-        padding-inline: 28px;
+        padding-top: 20px;
+        padding-inline: clamp(26px, 4vw, 48px);
     }
 
     #chat .mes {
@@ -769,14 +832,14 @@ button:disabled,
 
     #chat {
         max-width: 100%;
-        padding: 14px 10px 116px;
+        padding: 12px 10px 104px;
         border-inline: 0 !important;
         box-shadow: none;
     }
 
     #chat .welcomePanel {
-        padding: 12px !important;
-        gap: 10px;
+        padding: 10px !important;
+        gap: 8px;
     }
 
     #chat .welcomeHeaderTitle {
@@ -827,12 +890,12 @@ button:disabled,
     }
 
     #form_sheld {
-        padding: 8px 8px 10px;
+        padding: 7px 8px 9px;
     }
 
     #send_form {
         max-width: calc(100vw - 12px);
-        min-height: 56px;
+        min-height: 52px;
     }
 
     #send_but,
