@@ -714,7 +714,28 @@ function choosePreferredLmStudioModel(models = []) {
     }
   }
 
-  return chatModels.find(hasLoadedInstances) || chatModels[0];
+  const scoreModel = (model) => {
+    const haystack = [
+      model.key,
+      model.display_name,
+      model.publisher,
+      model.architecture,
+      model.selected_variant,
+      ...(model.variants || []),
+    ].join(' ').toLowerCase();
+    let score = 0;
+
+    if (hasLoadedInstances(model)) score += 100;
+    if (haystack.includes('qwen')) score += 50;
+    if (haystack.includes('deepseek')) score += 35;
+    if (haystack.includes('yi-') || haystack.includes('01-ai')) score += 20;
+    if (haystack.includes('gemma')) score += 5;
+    if (model.capabilities?.vision) score -= 4;
+
+    return score;
+  };
+
+  return [...chatModels].sort((left, right) => scoreModel(right) - scoreModel(left))[0];
 }
 
 async function checkSillyTavern() {
@@ -825,25 +846,45 @@ async function loadLmStudioModel(options = {}) {
     };
   }
 
-  const modelToLoad = options.variant || knownModel?.selectedVariant || requestedModel;
-  const loadBody = { model: modelToLoad };
+  const modelCandidates = [
+    options.variant,
+    requestedModel,
+    knownModel?.key,
+    knownModel?.selectedVariant,
+    ...(knownModel?.variants || []),
+  ].filter(Boolean);
+  const uniqueModelCandidates = [...new Set(modelCandidates)];
 
-  const contextLength = Number(options.contextLength || options.context_length || 0);
-  if (contextLength > 0) {
-    loadBody.context_length = contextLength;
-  }
-  if (options.flash_attention !== undefined) {
-    loadBody.flash_attention = Boolean(options.flash_attention);
-  }
-  if (options.ttl !== undefined) {
-    loadBody.ttl = options.ttl;
-  }
+  const buildLoadBody = (modelToLoad) => {
+    const loadBody = { model: modelToLoad };
+    const contextLength = Number(options.contextLength || options.context_length || 0);
+    if (contextLength > 0) {
+      loadBody.context_length = contextLength;
+    }
+    if (options.flash_attention !== undefined) {
+      loadBody.flash_attention = Boolean(options.flash_attention);
+    }
+    if (options.ttl !== undefined) {
+      loadBody.ttl = options.ttl;
+    }
+    return loadBody;
+  };
 
-  const response = await requestJson(
-    `${getLmStudioRestBaseUrl()}/models/load`,
-    { method: 'POST', body: loadBody },
-    Number(options.timeoutMs || 120000),
-  );
+  let response = null;
+  let modelToLoad = uniqueModelCandidates[0];
+  const attemptedModels = [];
+  for (const candidate of uniqueModelCandidates) {
+    modelToLoad = candidate;
+    attemptedModels.push(candidate);
+    response = await requestJson(
+      `${getLmStudioRestBaseUrl()}/models/load`,
+      { method: 'POST', body: buildLoadBody(candidate) },
+      Number(options.timeoutMs || 120000),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      break;
+    }
+  }
   const after = await checkLmStudio();
   const ok = response.statusCode >= 200 && response.statusCode < 300;
 
@@ -852,6 +893,8 @@ async function loadLmStudioModel(options = {}) {
     statusCode: response.statusCode,
     requestedModel,
     loadedModel: modelToLoad,
+    attemptedModels,
+    reason: ok ? null : (response.data?.error || response.data?.message || response.body || 'LM Studio model load failed.'),
     result: response.data,
     before,
     after,
@@ -1000,6 +1043,12 @@ async function getStatus() {
   return {
     config: CONFIG,
     backendPort,
+    backend: {
+      port: backendPort,
+      preferredPort: CONFIG.backendStartPort,
+      fallbackPortUsed: Boolean(backendPort && backendPort !== CONFIG.backendStartPort),
+      baseUrl: backendPort ? `http://127.0.0.1:${backendPort}` : null,
+    },
     proxy: {
       baseUrl: backendPort ? `http://127.0.0.1:${backendPort}/v1` : null,
       forceChinese: process.env.PR_FORCE_CHINESE !== 'false',

@@ -20,6 +20,22 @@ let updateState = {
 };
 let updateCheckPromise = null;
 let downloadedUpdate = false;
+let bootPromise = null;
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 function sendUpdateState() {
   mainWindow?.webContents.send('update-state', updateState);
@@ -266,6 +282,21 @@ async function createMainWindow(backendPort) {
 }
 
 async function boot() {
+  if (!singleInstanceLock) {
+    return null;
+  }
+
+  if (bootPromise) {
+    return bootPromise;
+  }
+
+  bootPromise = bootInner().finally(() => {
+    bootPromise = null;
+  });
+  return bootPromise;
+}
+
+async function bootInner() {
   configureAutoUpdater();
 
   const backend = await createBackendServer({
@@ -299,6 +330,8 @@ async function boot() {
       checkForUpdates();
     }, 1500);
   }
+
+  return mainWindow;
 }
 
 app.whenReady().then(boot);

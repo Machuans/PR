@@ -571,7 +571,14 @@
         state.modeTheme.textContent = status.sillyTavernTheme?.installed ? '微信风格已安装' : '等待安装主题';
 
         if (Date.now() > state.footerLockUntil) {
-          state.footer.textContent = `本地后端端口 ${status.backendPort || backendPort}`;
+          const backend = status.backend || {
+            port: status.backendPort || backendPort,
+            preferredPort: backendPort,
+            fallbackPortUsed: false,
+          };
+          state.footer.textContent = backend.fallbackPortUsed
+            ? `本地后端端口 ${backend.port}（首选 ${backend.preferredPort} 被占用）`
+            : `本地后端端口 ${backend.port || backendPort}`;
         }
         const allReady = status.lmStudio.ok && status.sillyTavern.ok && Boolean(status.proxy.baseUrl);
         setDot(state.headerDot, allReady, !allReady);
