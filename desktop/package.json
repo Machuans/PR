@@ -1,6 +1,6 @@
 {
   "name": "pr-desktop",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "PR Desktop launcher for SillyTavern, LM Studio, local models, and GitHub updates.",
   "main": "src/main.js",
   "scripts": {

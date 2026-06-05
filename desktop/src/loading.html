@@ -6,7 +6,7 @@
     <title>PR Desktop</title>
     <link rel="stylesheet" href="./loading.css">
   </head>
-  <body>
+  <body class="right-hidden">
     <div class="app-shell">
       <aside class="sidebar left-sidebar" id="left-sidebar" aria-label="会话与角色">
         <div class="brand-row">
@@ -79,15 +79,15 @@
                 <button id="open-releases-button" type="button">发布页</button>
               </div>
             </details>
-            <button class="ghost-button" id="right-toggle" type="button">设置</button>
+            <button class="ghost-button compact-button" id="right-toggle" type="button">设置</button>
           </div>
         </header>
 
-        <section class="conversation-surface" aria-label="服务消息流" data-route-view="/chat">
-          <article class="message-row assistant">
+        <section class="workspace-surface status-workspace" aria-label="服务消息流" data-route-view="/chat">
+          <article class="workspace-card status-strip">
             <div class="message-avatar">PR</div>
-            <div class="bubble">
-              <div class="bubble-head">
+            <div class="workspace-card-body">
+              <div class="workspace-card-head">
                 <strong>PR Agent</strong>
                 <span id="mode-agent">pr-agent</span>
               </div>
@@ -95,24 +95,24 @@
             </div>
           </article>
 
-          <article class="message-row system">
+          <article class="workspace-card status-strip">
             <div class="message-avatar status-avatar">LM</div>
-            <div class="bubble compact">
+            <div class="workspace-card-body">
               <div class="inline-status">
                 <span class="dot" id="lm-dot"></span>
                 <strong>LM Studio</strong>
                 <span id="lm-text">检查中</span>
               </div>
               <small id="lm-model">等待模型状态</small>
-              <div class="bubble-actions">
+              <div class="workspace-actions">
                 <button class="accent-button" id="load-local-model-button" type="button" disabled>加载本地模型</button>
               </div>
             </div>
           </article>
 
-          <article class="message-row system">
+          <article class="workspace-card status-strip">
             <div class="message-avatar status-avatar">ST</div>
-            <div class="bubble compact">
+            <div class="workspace-card-body">
               <div class="inline-status">
                 <span class="dot" id="st-dot"></span>
                 <strong>SillyTavern</strong>
@@ -122,10 +122,10 @@
             </div>
           </article>
 
-          <article class="message-row assistant">
+          <article class="workspace-card strategy-card">
             <div class="message-avatar">AI</div>
-            <div class="bubble">
-              <div class="bubble-head">
+            <div class="workspace-card-body">
+              <div class="workspace-card-head">
                 <strong>多模型策略</strong>
                 <span id="mode-theme">微信风格气泡</span>
               </div>
@@ -143,104 +143,107 @@
           </article>
         </section>
 
-        <section class="conversation-surface" aria-label="角色广场" data-route-view="/characters" hidden>
-          <article class="message-row assistant">
-            <div class="message-avatar">RP</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong>角色广场</strong>
-                <span id="characters-count">正在加载</span>
-              </div>
+        <section class="workspace-surface wide-workspace" aria-label="角色广场" data-route-view="/characters" hidden>
+          <div class="workspace-toolbar">
+            <div>
+              <span class="workspace-kicker">角色广场</span>
+              <h2>角色卡与导入</h2>
               <p id="characters-summary">正在扫描 PR 本地角色目录与 SillyTavern 角色目录。</p>
-              <div class="bubble-actions">
-                <button class="accent-button" id="refresh-characters-button" type="button">刷新角色</button>
-                <button class="accent-button" id="create-template-character-button" type="button">创建模板角色</button>
-                <button class="accent-button" id="open-characters-folder-button" type="button">打开角色目录</button>
+            </div>
+            <span class="workspace-badge" id="characters-count">正在加载</span>
+          </div>
+
+          <article class="workspace-card">
+            <div class="workspace-card-head">
+              <div>
+                <strong>角色操作</strong>
+                <small>扫描、创建模板或打开本地角色目录。</small>
               </div>
+              <span id="characters-source">本地 / SillyTavern</span>
+            </div>
+            <div class="workspace-actions">
+              <button class="accent-button" id="refresh-characters-button" type="button">刷新角色</button>
+              <button class="accent-button" id="create-template-character-button" type="button">创建模板角色</button>
+              <button class="accent-button" id="open-characters-folder-button" type="button">打开角色目录</button>
             </div>
           </article>
 
-          <article class="message-row system">
-            <div class="message-avatar status-avatar">CC</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong>角色列表</strong>
-                <span id="characters-source">本地 / SillyTavern</span>
-              </div>
-              <div class="strategy-grid" id="characters-list">
-                <div>
-                  <span>加载中</span>
-                  <strong>等待后端返回角色数据</strong>
-                </div>
-              </div>
+          <article class="workspace-card">
+            <div class="workspace-card-head">
+              <strong>角色列表</strong>
+              <span>本地 / SillyTavern</span>
             </div>
-          </article>
-        </section>
-
-        <section class="conversation-surface" aria-label="记忆摘要" data-route-view="/memory" hidden>
-          <article class="message-row assistant">
-            <div class="message-avatar">ME</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong>记忆摘要</strong>
-                <span id="memory-status">正在加载</span>
-              </div>
-              <p>这里保存用户偏好、关系进展、已发生剧情、角色承诺和禁止触碰的话题。内容会写入本地后端。</p>
-              <div class="bubble-actions">
-                <button class="accent-button" id="refresh-memory-button" type="button">刷新记忆</button>
-                <button class="accent-button" id="save-memory-button" type="button">保存记忆</button>
-              </div>
-            </div>
-          </article>
-
-          <article class="message-row system">
-            <div class="message-avatar status-avatar">SM</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong>剧情摘要</strong>
-                <span>Summary</span>
-              </div>
-              <textarea id="memory-summary-input" rows="5" aria-label="剧情摘要" placeholder="当前故事发展到哪里。"></textarea>
-              <div class="strategy-grid">
-                <div>
-                  <span>用户称呼</span>
-                  <strong id="memory-name-display">未设置</strong>
-                </div>
-                <div>
-                  <span>关系状态</span>
-                  <strong id="memory-relationship-display">未设置</strong>
-                </div>
+            <div class="card-list-grid" id="characters-list">
+              <div>
+                <span>加载中</span>
+                <strong>等待后端返回角色数据</strong>
               </div>
             </div>
           </article>
         </section>
 
-        <section class="conversation-surface" aria-label="全局设置" data-route-view="/settings" hidden>
-          <article class="message-row assistant">
-            <div class="message-avatar">ST</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong id="settings-section-title">基础外观</strong>
-                <span id="settings-status">正在加载</span>
+        <section class="workspace-surface wide-workspace" aria-label="记忆摘要" data-route-view="/memory" hidden>
+          <div class="workspace-toolbar">
+            <div>
+              <span class="workspace-kicker">记忆系统</span>
+              <h2>记忆摘要与剧情进展</h2>
+              <p>保存用户偏好、关系进展、已发生剧情、角色承诺和禁止触碰的话题。</p>
+            </div>
+            <span class="workspace-badge" id="memory-status">正在加载</span>
+          </div>
+
+          <article class="workspace-card editor-card">
+            <div class="workspace-card-head">
+              <strong>剧情摘要</strong>
+              <span>Summary</span>
+            </div>
+            <textarea id="memory-summary-input" rows="7" aria-label="剧情摘要" placeholder="当前故事发展到哪里。"></textarea>
+            <div class="workspace-actions">
+              <button class="accent-button" id="refresh-memory-button" type="button">刷新记忆</button>
+              <button class="accent-button" id="save-memory-button" type="button">保存记忆</button>
+            </div>
+            <div class="strategy-grid info-grid">
+              <div>
+                <span>用户称呼</span>
+                <strong id="memory-name-display">未设置</strong>
               </div>
+              <div>
+                <span>关系状态</span>
+                <strong id="memory-relationship-display">未设置</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="workspace-surface settings-workspace" aria-label="全局设置" data-route-view="/settings" hidden>
+          <div class="workspace-toolbar">
+            <div>
+              <span class="workspace-kicker">全局配置</span>
+              <h2 id="settings-section-title">基础外观</h2>
               <p id="settings-section-summary">主题、字体大小、页面宽度和头像样式会保存到本地设置文件。</p>
-              <div class="bubble-actions">
-                <button class="accent-button" id="refresh-settings-button" type="button">刷新设置</button>
-                <button class="accent-button" id="save-settings-button" type="button">保存设置</button>
-                <button class="accent-button" id="open-settings-folder-button" type="button">打开设置目录</button>
-              </div>
             </div>
-          </article>
+            <span class="workspace-badge" id="settings-status">正在加载</span>
+          </div>
 
-          <article class="message-row system">
-            <div class="message-avatar status-avatar">DB</div>
-            <div class="bubble">
-              <div class="bubble-head">
-                <strong id="settings-form-title">基础外观</strong>
-                <span>Local JSON</span>
-              </div>
-              <div class="strategy-grid" id="settings-form"></div>
+          <div class="workspace-actions sticky-actions">
+            <button class="accent-button" id="refresh-settings-button" type="button">刷新设置</button>
+            <button class="accent-button" id="save-settings-button" type="button">保存设置</button>
+            <button class="accent-button" id="open-settings-folder-button" type="button">打开设置目录</button>
+          </div>
+
+          <div class="settings-tabs" aria-label="设置分组">
+            <button type="button" data-settings-section="appearance">基础外观</button>
+            <button type="button" data-settings-section="chat">聊天显示</button>
+            <button type="button" data-settings-section="background">背景效果</button>
+            <button type="button" data-settings-section="advanced">高级设置</button>
+          </div>
+
+          <article class="workspace-card settings-form-card">
+            <div class="workspace-card-head">
+              <strong id="settings-form-title">基础外观</strong>
+              <span>Local JSON</span>
             </div>
+            <div class="settings-form-grid" id="settings-form"></div>
           </article>
         </section>
 
@@ -252,6 +255,10 @@
       </main>
 
       <aside class="sidebar right-sidebar" id="right-sidebar" aria-label="模型与设置">
+        <div class="right-sidebar-head">
+          <span>状态与快捷操作</span>
+          <button class="icon-button" id="right-close-button" type="button" aria-label="关闭右侧栏">×</button>
+        </div>
         <section class="panel-card status-panel" id="proxy-panel" data-route-side="/chat /settings /memory">
           <div class="panel-head">
             <span class="dot" id="proxy-dot"></span>
@@ -292,7 +299,7 @@
           </div>
         </section>
 
-        <section class="panel-card" data-route-side="/chat /settings /memory">
+        <section class="panel-card" data-route-side="/chat /memory">
           <div class="panel-title">设置分组</div>
           <div class="settings-list">
             <button type="button" data-settings-section="appearance">
@@ -450,6 +457,8 @@
         const normalizedRoute = normalizeRoute(route);
         const meta = routeMeta[normalizedRoute];
         state.currentRoute = normalizedRoute;
+        document.body.classList.add('right-hidden');
+        document.body.classList.remove('right-open');
         state.topbarEyebrow.textContent = meta.eyebrow;
         state.topbarHeading.textContent = meta.title;
 
@@ -828,6 +837,9 @@
       function renderSettingsForm() {
         const section = settingsSections[state.currentSettingsSection] || settingsSections.appearance;
         const sectionState = getCurrentSettingsSlice();
+        document.querySelectorAll('[data-settings-section]').forEach((button) => {
+          button.setAttribute('aria-current', button.dataset.settingsSection === state.currentSettingsSection ? 'page' : 'false');
+        });
         state.settingsSectionTitle.textContent = section.title;
         state.settingsSectionSummary.textContent = section.summary;
         state.settingsFormTitle.textContent = section.title;
@@ -924,23 +936,20 @@
       });
 
       function toggleRightPanel() {
-        if (window.matchMedia('(max-width: 1120px)').matches) {
-          document.body.classList.toggle('right-open');
-          document.body.classList.remove('right-hidden');
-          return;
-        }
-        document.body.classList.toggle('right-hidden');
+        const shouldOpen = document.body.classList.contains('right-hidden');
+        document.body.classList.toggle('right-hidden', !shouldOpen);
+        document.body.classList.toggle('right-open', shouldOpen);
       }
 
       function openSettingsRoute() {
         pushRoute('/settings');
-        document.body.classList.remove('right-hidden');
-        if (window.matchMedia('(max-width: 1120px)').matches) {
-          document.body.classList.add('right-open');
-        }
       }
 
-      document.querySelector('#right-toggle').addEventListener('click', openSettingsRoute);
+      document.querySelector('#right-toggle').addEventListener('click', toggleRightPanel);
+      document.querySelector('#right-close-button').addEventListener('click', () => {
+        document.body.classList.add('right-hidden');
+        document.body.classList.remove('right-open');
+      });
       document.querySelector('#composer-settings-button').addEventListener('click', openSettingsRoute);
 
       document.querySelector('#refresh-characters-button').addEventListener('click', () => {
