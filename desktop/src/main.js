@@ -11,7 +11,6 @@ const {
 
 const RELEASES_URL = 'https://github.com/Machuans/PR/releases';
 let mainWindow = null;
-let sillyTavernWindow = null;
 let updateState = {
   status: 'idle',
   message: '等待检查 GitHub Release 更新',
@@ -190,17 +189,27 @@ function isLocalSillyTavernUrl(url) {
   }
 }
 
+function isAppWindowUrl(url) {
+  try {
+    const target = new URL(url);
+    return target.protocol === 'file:' || isLocalSillyTavernUrl(url);
+  } catch {
+    return false;
+  }
+}
+
 function configureHostedSillyTavern(webContents) {
   webContents.setWindowOpenHandler(({ url }) => {
     if (isLocalSillyTavernUrl(url)) {
-      return { action: 'allow' };
+      webContents.loadURL(url).catch(() => {});
+      return { action: 'deny' };
     }
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
   webContents.on('will-navigate', (event, url) => {
-    if (isLocalSillyTavernUrl(url)) {
+    if (isAppWindowUrl(url)) {
       return;
     }
     event.preventDefault();
@@ -220,39 +229,31 @@ function configureHostedSillyTavern(webContents) {
   });
 }
 
-async function openSillyTavernInApp() {
-  if (sillyTavernWindow && !sillyTavernWindow.isDestroyed()) {
-    if (sillyTavernWindow.isMinimized()) {
-      sillyTavernWindow.restore();
-    }
-    sillyTavernWindow.focus();
-    return { ok: true, url: CONFIG.sillyTavernUrl, reused: true };
+async function openSillyTavernInApp(options = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, reason: 'Main window is not ready.', url: CONFIG.sillyTavernUrl, mode: 'main-window' };
   }
 
-  sillyTavernWindow = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 980,
-    minHeight: 680,
-    title: 'PR SillyTavern',
-    backgroundColor: '#0d1017',
-    show: false,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
+  if (options.wait !== false) {
+    const status = await waitForSillyTavern({ timeoutMs: options.timeoutMs || 45000 });
+    if (!status.sillyTavern.ok) {
+      return { ok: false, reason: status.sillyTavern.error || 'SillyTavern is not reachable.', url: CONFIG.sillyTavernUrl, mode: 'main-window' };
+    }
+  }
 
-  sillyTavernWindow.removeMenu();
-  configureHostedSillyTavern(sillyTavernWindow.webContents);
-  sillyTavernWindow.once('ready-to-show', () => sillyTavernWindow?.show());
-  sillyTavernWindow.on('closed', () => {
-    sillyTavernWindow = null;
-  });
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
 
-  await sillyTavernWindow.loadURL(CONFIG.sillyTavernUrl);
-  return { ok: true, url: CONFIG.sillyTavernUrl, reused: false };
+  const currentUrl = mainWindow.webContents.getURL();
+  const reused = isLocalSillyTavernUrl(currentUrl);
+  if (!reused) {
+    await mainWindow.loadURL(CONFIG.sillyTavernUrl);
+  }
+
+  return { ok: true, url: CONFIG.sillyTavernUrl, reused, mode: 'main-window' };
 }
 
 async function createMainWindow(backendPort) {
@@ -272,7 +273,11 @@ async function createMainWindow(backendPort) {
   });
 
   mainWindow.removeMenu();
+  configureHostedSillyTavern(mainWindow.webContents);
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 
   await mainWindow.loadFile(path.join(__dirname, 'loading.html'), {
     query: { port: String(backendPort) },
@@ -321,8 +326,8 @@ async function bootInner() {
 
   mainWindow?.webContents.send('service-status', status);
 
-  if (status.sillyTavern.ok && process.env.PR_AUTO_OPEN_SILLYTAVERN === 'true') {
-    await openSillyTavernInApp();
+  if (status.sillyTavern.ok) {
+    await openSillyTavernInApp({ wait: false });
   }
 
   if (app.isPackaged) {

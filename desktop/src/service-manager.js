@@ -1015,10 +1015,10 @@ function startSillyTavern() {
 
   if (nodeCommand && fs.existsSync(path.join(CONFIG.sillyTavernDir, 'server.js'))) {
     command = nodeCommand;
-    args = ['server.js'];
+    args = ['server.js', '--browserLaunchEnabled=false'];
   } else if (npmCommand) {
     command = npmCommand;
-    args = ['start'];
+    args = ['start', '--', '--browserLaunchEnabled=false'];
   }
 
   if (!command) {
