@@ -927,6 +927,27 @@
         });
       }
 
+      function handleUiError(error, fallbackMessage) {
+        setFooter(`${fallbackMessage}：${error.message || error}`, 6000);
+      }
+
+      async function runUiAction(fallbackMessage, action) {
+        try {
+          return await action();
+        } catch (error) {
+          handleUiError(error, fallbackMessage);
+          return null;
+        }
+      }
+
+      function refreshStatusSafely() {
+        runUiAction('状态刷新失败', getStatus);
+      }
+
+      function refreshUpdateStateSafely() {
+        runUiAction('更新状态刷新失败', refreshUpdateState);
+      }
+
       document.querySelector('#sidebar-toggle').addEventListener('click', () => {
         document.body.classList.toggle('left-collapsed');
       });
@@ -955,8 +976,12 @@
       document.querySelector('#refresh-characters-button').addEventListener('click', () => {
         loadCharacters({ force: true });
       });
-      document.querySelector('#create-template-character-button').addEventListener('click', createTemplateCharacter);
-      document.querySelector('#side-create-template-character-button').addEventListener('click', createTemplateCharacter);
+      document.querySelector('#create-template-character-button').addEventListener('click', () => {
+        runUiAction('创建角色失败', createTemplateCharacter);
+      });
+      document.querySelector('#side-create-template-character-button').addEventListener('click', () => {
+        runUiAction('创建角色失败', createTemplateCharacter);
+      });
       document.querySelector('#open-characters-folder-button').addEventListener('click', () => {
         postAction('/api/open/characters-folder');
       });
@@ -965,10 +990,14 @@
       });
 
       document.querySelector('#refresh-memory-button').addEventListener('click', loadMemory);
-      document.querySelector('#save-memory-button').addEventListener('click', saveMemory);
+      document.querySelector('#save-memory-button').addEventListener('click', () => {
+        runUiAction('保存记忆失败', saveMemory);
+      });
 
       document.querySelector('#refresh-settings-button').addEventListener('click', loadSettings);
-      document.querySelector('#save-settings-button').addEventListener('click', saveSettings);
+      document.querySelector('#save-settings-button').addEventListener('click', () => {
+        runUiAction('保存设置失败', saveSettings);
+      });
       document.querySelector('#open-settings-folder-button').addEventListener('click', () => {
         postAction('/api/open/settings-folder');
       });
@@ -986,10 +1015,12 @@
       });
 
       document.querySelector('#start-button').addEventListener('click', async () => {
-        closeMenus();
-        state.footer.textContent = '正在启动服务';
-        await postAction('/api/start');
-        await getStatus();
+        await runUiAction('启动服务失败', async () => {
+          closeMenus();
+          state.footer.textContent = '正在启动服务';
+          await postAction('/api/start');
+          await getStatus();
+        });
       });
 
       document.querySelector('#open-models-button').addEventListener('click', () => {
@@ -998,23 +1029,27 @@
       });
 
       document.querySelector('#load-local-model-button').addEventListener('click', async () => {
-        closeMenus();
-        if (!state.preferredLoadModel) {
-          return;
-        }
-        state.footer.textContent = `正在加载本地模型：${state.preferredLoadModel}`;
-        state.loadLocalModelButton.disabled = true;
-        state.loadLocalModelButton.textContent = '正在加载模型';
-        const result = await postAction('/api/models/load', { modelId: state.preferredLoadModel });
-        if (!result.ok) {
-          state.footer.textContent = result.reason || result.error || '模型加载失败';
-        }
-        await getStatus();
+        await runUiAction('加载本地模型失败', async () => {
+          closeMenus();
+          if (!state.preferredLoadModel) {
+            return;
+          }
+          state.footer.textContent = `正在加载本地模型：${state.preferredLoadModel}`;
+          state.loadLocalModelButton.disabled = true;
+          state.loadLocalModelButton.textContent = '正在加载模型';
+          const result = await postAction('/api/models/load', { modelId: state.preferredLoadModel });
+          if (!result.ok) {
+            state.footer.textContent = result.reason || result.error || '模型加载失败';
+          }
+          await getStatus();
+        });
       });
 
       document.querySelector('#copy-proxy-button').addEventListener('click', async () => {
-        await navigator.clipboard.writeText(state.proxyUrl.textContent);
-        state.footer.textContent = `已复制：${state.proxyUrl.textContent}`;
+        await runUiAction('复制接口失败', async () => {
+          await navigator.clipboard.writeText(state.proxyUrl.textContent);
+          state.footer.textContent = `已复制：${state.proxyUrl.textContent}`;
+        });
       });
 
       document.querySelector('#open-st-button').addEventListener('click', () => {
@@ -1022,28 +1057,32 @@
       });
 
       document.querySelector('#update-button').addEventListener('click', async () => {
-        closeMenus();
-        setDot(state.updateDot, false, true);
-        state.updateText.textContent = '正在检查更新';
-        const result = await postAction('/api/update/check');
-        if (result.ok) {
-          setDot(state.updateDot, true);
-          renderUpdate(result.state);
-        } else {
-          setDot(state.updateDot, false);
-          state.updateText.textContent = result.reason || result.error || '当前环境不能自动更新';
-        }
+        await runUiAction('检查更新失败', async () => {
+          closeMenus();
+          setDot(state.updateDot, false, true);
+          state.updateText.textContent = '正在检查更新';
+          const result = await postAction('/api/update/check');
+          if (result.ok) {
+            setDot(state.updateDot, true);
+            renderUpdate(result.state);
+          } else {
+            setDot(state.updateDot, false);
+            state.updateText.textContent = result.reason || result.error || '当前环境不能自动更新';
+          }
+        });
       });
 
       document.querySelector('#install-update-button').addEventListener('click', async () => {
-        closeMenus();
-        setDot(state.updateDot, false, true);
-        state.updateText.textContent = '正在准备安装更新';
-        const result = await postAction('/api/update/install');
-        if (!result.ok) {
-          setDot(state.updateDot, false);
-          state.updateText.textContent = result.reason || '没有可安装的更新';
-        }
+        await runUiAction('安装更新失败', async () => {
+          closeMenus();
+          setDot(state.updateDot, false, true);
+          state.updateText.textContent = '正在准备安装更新';
+          const result = await postAction('/api/update/install');
+          if (!result.ok) {
+            setDot(state.updateDot, false);
+            state.updateText.textContent = result.reason || '没有可安装的更新';
+          }
+        });
       });
 
       document.querySelector('#open-releases-button').addEventListener('click', () => {
@@ -1057,10 +1096,10 @@
       });
 
       pushRoute(getRouteFromLocation(), true);
-      getStatus();
-      refreshUpdateState();
-      setInterval(getStatus, 2500);
-      setInterval(refreshUpdateState, 8000);
+      refreshStatusSafely();
+      refreshUpdateStateSafely();
+      setInterval(refreshStatusSafely, 2500);
+      setInterval(refreshUpdateStateSafely, 8000);
     </script>
   </body>
 </html>

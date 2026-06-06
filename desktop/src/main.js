@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { fileURLToPath } = require('node:url');
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const {
@@ -10,6 +11,7 @@ const {
 } = require('./service-manager');
 
 const RELEASES_URL = 'https://github.com/Machuans/PR/releases';
+const LOADING_FILE = path.join(__dirname, 'loading.html');
 let mainWindow = null;
 let updateState = {
   status: 'idle',
@@ -189,22 +191,53 @@ function isLocalSillyTavernUrl(url) {
   }
 }
 
-function isAppWindowUrl(url) {
+function isTrustedAppFileUrl(url) {
   try {
     const target = new URL(url);
-    return target.protocol === 'file:' || isLocalSillyTavernUrl(url);
+    return target.protocol === 'file:' && path.normalize(fileURLToPath(target)) === path.normalize(LOADING_FILE);
   } catch {
     return false;
+  }
+}
+
+function isAppWindowUrl(url) {
+  return isTrustedAppFileUrl(url) || isLocalSillyTavernUrl(url);
+}
+
+function isAllowedExternalUrl(url) {
+  try {
+    const target = new URL(url);
+    return ['http:', 'https:', 'mailto:'].includes(target.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function reportNavigationError(error, url) {
+  dialog.showErrorBox('PR Desktop 导航失败', `无法打开：${url}\n\n${error.message}`);
+}
+
+async function openExternalSafely(url) {
+  if (!isAllowedExternalUrl(url)) {
+    return { ok: false, reason: `Blocked unsupported external URL protocol: ${url}` };
+  }
+
+  try {
+    await shell.openExternal(url);
+    return { ok: true, url };
+  } catch (error) {
+    reportNavigationError(error, url);
+    return { ok: false, error: error.message, url };
   }
 }
 
 function configureHostedSillyTavern(webContents) {
   webContents.setWindowOpenHandler(({ url }) => {
     if (isLocalSillyTavernUrl(url)) {
-      webContents.loadURL(url).catch(() => {});
+      webContents.loadURL(url).catch((error) => reportNavigationError(error, url));
       return { action: 'deny' };
     }
-    shell.openExternal(url);
+    openExternalSafely(url);
     return { action: 'deny' };
   });
 
@@ -213,7 +246,7 @@ function configureHostedSillyTavern(webContents) {
       return;
     }
     event.preventDefault();
-    shell.openExternal(url);
+    openExternalSafely(url);
   });
 
   webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
@@ -292,7 +325,7 @@ async function createMainWindow(backendPort) {
     mainWindow = null;
   });
 
-  await mainWindow.loadFile(path.join(__dirname, 'loading.html'), {
+  await mainWindow.loadFile(LOADING_FILE, {
     query: { port: String(backendPort) },
   });
 
@@ -322,9 +355,9 @@ async function bootInner() {
     getUpdateState,
     installDownloadedUpdate,
     openSillyTavernApp: openSillyTavernInApp,
-    openExternal: (url) => shell.openExternal(url),
+    openExternal: openExternalSafely,
     openPath: (target) => shell.openPath(target),
-    openReleases: () => shell.openExternal(RELEASES_URL),
+    openReleases: () => openExternalSafely(RELEASES_URL),
   });
 
   await createMainWindow(backend.port);

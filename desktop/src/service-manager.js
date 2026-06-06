@@ -329,7 +329,7 @@ function getCharacterScanStatus() {
 function startCharacterScan(options = {}) {
   ensureRuntimeDirs();
 
-  if (!options.force && characterScanJob && characterScanJob.status === 'running') {
+  if (characterScanJob && characterScanJob.status === 'running') {
     return getCharacterScanStatus();
   }
 
@@ -414,6 +414,9 @@ function startCharacterScan(options = {}) {
     });
   }).finally(() => {
     job.worker = null;
+  });
+  job.promise.catch((error) => {
+    appendLog(sillyTavernLog, `Character scan failed: ${error.message}`);
   });
 
   characterScanJob = job;
@@ -990,6 +993,9 @@ function startLmStudioServer() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   pipeProcessLogs(lmStudioServerProcess, lmStudioLog, 'lms server');
+  lmStudioServerProcess.on('exit', () => {
+    lmStudioServerProcess = null;
+  });
   appendLog(lmStudioLog, `Started lms server: ${lms}`);
 
   return { started: true, path: lms };
@@ -1034,6 +1040,9 @@ function startSillyTavern() {
   });
 
   pipeProcessLogs(sillyTavernProcess, sillyTavernLog, 'sillytavern');
+  sillyTavernProcess.on('exit', () => {
+    sillyTavernProcess = null;
+  });
   appendLog(sillyTavernLog, `Started SillyTavern from ${CONFIG.sillyTavernDir} with ${command} ${args.join(' ')}`);
   return { started: true, path: CONFIG.sillyTavernDir };
 }
@@ -1138,6 +1147,19 @@ function listenOnAvailablePort(server, startPort, attempts = 20) {
 
     tryListen();
   });
+}
+
+async function openPathResult(handlers, target) {
+  if (!handlers.openPath) {
+    return { ok: false, reason: 'Open path handler is not available.', path: target };
+  }
+
+  const error = await handlers.openPath(target);
+  if (error) {
+    return { ok: false, reason: error, path: target };
+  }
+
+  return { ok: true, path: target };
 }
 
 async function createBackendServer(handlers = {}) {
@@ -1251,26 +1273,26 @@ async function createBackendServer(handlers = {}) {
       }
 
       if (url.pathname === '/api/open/model-folder') {
-        handlers.openPath?.(CONFIG.modelDir);
-        sendJson(res, 200, { ok: true, path: CONFIG.modelDir });
+        const result = await openPathResult(handlers, CONFIG.modelDir);
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 
       if (url.pathname === '/api/open/sillytavern-folder') {
-        handlers.openPath?.(CONFIG.sillyTavernDir);
-        sendJson(res, 200, { ok: true, path: CONFIG.sillyTavernDir });
+        const result = await openPathResult(handlers, CONFIG.sillyTavernDir);
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 
       if (url.pathname === '/api/open/characters-folder') {
-        handlers.openPath?.(localCharacterDir);
-        sendJson(res, 200, { ok: true, path: localCharacterDir });
+        const result = await openPathResult(handlers, localCharacterDir);
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 
       if (url.pathname === '/api/open/settings-folder') {
-        handlers.openPath?.(configDir);
-        sendJson(res, 200, { ok: true, path: configDir });
+        const result = await openPathResult(handlers, configDir);
+        sendJson(res, result.ok ? 200 : 500, result);
         return;
       }
 
@@ -1302,8 +1324,8 @@ async function createBackendServer(handlers = {}) {
       }
 
       if (url.pathname === '/api/update/releases') {
-        await handlers.openReleases?.();
-        sendJson(res, 200, { ok: true });
+        const result = await handlers.openReleases?.();
+        sendJson(res, result?.ok === false ? 500 : 200, result || { ok: true });
         return;
       }
 
@@ -1313,7 +1335,18 @@ async function createBackendServer(handlers = {}) {
     }
   });
 
-  backendPort = await listenOnAvailablePort(backendServer, CONFIG.backendStartPort);
+  backendServer.on('close', () => {
+    backendServer = null;
+    backendPort = null;
+  });
+
+  try {
+    backendPort = await listenOnAvailablePort(backendServer, CONFIG.backendStartPort);
+  } catch (error) {
+    backendServer = null;
+    backendPort = null;
+    throw error;
+  }
   return { server: backendServer, port: backendPort };
 }
 
